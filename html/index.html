@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Machines - Predictive Maintenance</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../css/index.css">
+</head>
+<body>
+
+  <!-- Mobile top navbar -->
+  <nav class="navbar navbar-dark bg-dark d-md-none">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="index.html">Predictive Maintenance</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mobileMenu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+    </div>
+    <div class="collapse bg-dark p-2" id="mobileMenu">
+      <a class="nav-link text-white" href="index.html">Machines</a>
+      <a class="nav-link text-white" href="logs.html">Logs</a>
+      <a class="nav-link text-white" href="status.html">Status Updates</a>
+      <a class="nav-link text-white" href="problems.html">Problems</a>
+      <a class="nav-link text-white" href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <div class="app d-flex">
+
+    <!-- Sidebar (desktop) -->
+    <aside class="sidebar d-none d-md-flex flex-column align-items-center text-center p-3">
+      <img src="../img/user.jpg" alt="User" class="user-photo mb-2">
+      <div class="user-info">
+        <div class="fw-bold" id="sbName">Demo User</div>
+      </div>
+
+      <nav class="mt-4 w-100">
+        <a class="nav-link" href="index.html">Machines</a>
+        <a class="nav-link" href="logs.html">Logs</a>
+        <a class="nav-link" href="status.html">Status Updates</a>
+        <a class="nav-link" href="problems.html">Problems</a>
+        <a class="nav-link" href="profile.html">Profile</a>
+      </nav>
+
+      <a class="btn btn-sm btn-light mt-auto mb-2 edit-circle" href="profile.html" title="Edit profile">
+        ✎
+      </a>
+    </aside>
+
+    <!-- Content -->
+    <main class="content p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h4 m-0">Machines</h1>
+        <small class="text-muted">Click "Open" to view machine details</small>
+      </div>
+
+      <div id="machinesRow" class="row g-3">
+        <!-- populated by script.js -->
+      </div>
+    </main>
+  </div>
+
+  <!-- FAB -->
+  <button id="fabAdd" class="fab btn btn-primary shadow-lg" data-bs-toggle="modal" data-bs-target="#addModal" title="Add machine">
+    +
+  </button>
+
+  <!-- Add Modal -->
+  <div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+      <form id="addForm" class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add new machine</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Name</label>
+            <input id="new-name" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Image URL or Filename</label>
+            <input id="new-img" class="form-control" placeholder="Paste image URL or filename">
+            <small class="text-muted d-block mt-1">
+              <strong>How to get image URL:</strong><br>
+              1. Google Images: Right-click image → "Copy image address"<br>
+              2. Or paste Google Images link (we'll extract it)<br>
+              3. Or enter filename from img folder (e.g., machine1.jpg)
+            </small>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Min Temp</label>
+              <input id="new-minT" type="number" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Max Temp</label>
+              <input id="new-maxT" type="number" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Min Vib</label>
+              <input id="new-minV" type="number" step="0.01" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Max Vib</label>
+              <input id="new-maxV" type="number" step="0.01" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Report interval (seconds)</label>
+              <input id="new-interval" type="number" class="form-control" placeholder="e.g. 10">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" type="submit">Add</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../js/script.js"></script>
+</body>
+</html>

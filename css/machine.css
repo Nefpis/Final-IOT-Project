@@ -1,0 +1,63 @@
+@import url('../css/index.css'); /* reuse base styles */
+
+/* Main wrapper */
+.app {
+  min-height: 100vh;
+  display: flex;
+  background: #f5f8fb;
+}
+
+/* Content area next to sidebar */
+.content {
+  flex: 1;
+  padding: 20px 28px;
+}
+
+/* Card styling */
+.card {
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(14, 34, 58, 0.06);
+  background: white;
+}
+
+/* Status lights */
+.status-lights {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.light {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  opacity: 0.25;
+}
+
+.light.active {
+  opacity: 1;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.12);
+}
+
+.light.green {
+  background: #28a745;
+}
+
+.light.yellow {
+  background: #f0ad4e;
+}
+
+.light.red {
+  background: #dc3545;
+}
+
+/* Mobile: hide desktop sidebar */
+@media (max-width: 767.98px) {
+  .sidebar {
+    display: none;
+  }
+
+  .content {
+    padding: 14px;
+  }
+}
