@@ -7,36 +7,6 @@
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="../css/login-registration.css">
     <title>Login & Registration - TechPredict</title>
-    <style>
-        /* Loading overlay styles */
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-        }
-        .loading-overlay.active {
-            display: flex;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
 </head>
 <body>
  <div class="wrapper">
@@ -47,7 +17,7 @@
         <!------------------- login form -------------------------->
         <div class="login-container" id="login">
             <div class="top">
-                <span>Don't have an account? <a href="#">Sign Up</a></span>
+                <span>Don't have an account? <a href="#" onclick="showRegister()">Sign Up</a></span>
                 <header>Login</header>
             </div>
             <form id="loginForm">
@@ -68,7 +38,7 @@
                         <label for="login-check"> Remember Me</label>
                     </div>
                     <div class="two">
-                        <label><a href="#">Forgot password?</a></label>
+                        <label><a href="#" onclick="showForgotPassword()">Forgot password?</a></label>
                     </div>
                 </div>
             </form>
@@ -77,7 +47,7 @@
         <!------------------- registration form -------------------------->
         <div class="register-container" id="register">
             <div class="top">
-                <span>Have an account? <a href="#">Login</a></span>
+                <span>Have an account? <a href="#" onclick="showLogin()">Login</a></span>
                 <header>Sign Up</header>
             </div>
             <form id="registerForm">
@@ -114,7 +84,7 @@
         <!------------------- forgot password form -------------------------->
         <div class="register-container" id="forgotPassword" style="display: none;">
             <div class="top">
-                <span>Remember now? <a href="#">Login</a></span>
+                <span>Remember now? <a href="#" onclick="showLogin()">Login</a></span>
                 <header>Reset Password</header>
             </div>
             <form id="forgotForm">
@@ -131,14 +101,168 @@
 </div>   
 
 <!-- Loading indicator -->
+<style>
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+.loading-overlay.active {
+    display: flex;
+}
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
 <div class="loading-overlay" id="loadingOverlay">
     <div class="spinner"></div>
 </div>
 
-<!-- Scripts - Clean and organized -->
+<!-- Scripts -->
 <script src="../js/config.js"></script>
 <script src="../js/common.js"></script>
 <script src="../js/auth.js"></script>
-<script src="../js/login.js"></script>
+
+<script>
+    // Form switching animation
+    var x = document.getElementById("login");
+    var y = document.getElementById("register");
+    var z = document.getElementById("forgotPassword");
+
+    function showLogin() {
+        x.style.left = "4px";
+        y.style.right = "-520px";
+        z.style.display = "none";
+        x.style.opacity = 1;
+        y.style.opacity = 0;
+    }
+
+    function showRegister() {
+        x.style.left = "-510px";
+        y.style.right = "5px";
+        z.style.display = "none";
+        x.style.opacity = 0;
+        y.style.opacity = 1;
+    }
+
+    function showForgotPassword() {
+        x.style.left = "-510px";
+        y.style.right = "-520px";
+        z.style.display = "block";
+        z.style.right = "5px";
+        z.style.opacity = 1;
+        x.style.opacity = 0;
+        y.style.opacity = 0;
+    }
+
+    // Check if already logged in
+    if (Auth.isAuthenticated()) {
+        window.location.href = 'index.html';
+    }
+
+    // Login form handler
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        
+        // Show loading
+        document.getElementById('loadingOverlay').classList.add('active');
+        
+        try {
+            const result = await Auth.login(email, password);
+            
+            if (result.success) {
+                alert('Login successful! Welcome back.');
+                window.location.href = 'index.html';
+            } else {
+                alert('Login failed: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+    });
+
+    // Register form handler
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const firstname = document.getElementById('register-firstname').value;
+        const lastname = document.getElementById('register-lastname').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const terms = document.getElementById('register-check').checked;
+        
+        if (!terms) {
+            alert('Please accept the terms and conditions');
+            return;
+        }
+        
+        const fullName = `${firstname} ${lastname}`;
+        
+        // Show loading
+        document.getElementById('loadingOverlay').classList.add('active');
+        
+        try {
+            const result = await Auth.register(email, password, fullName);
+            
+            if (result.success) {
+                alert('Registration successful! Welcome to TechPredict.');
+                window.location.href = 'index.html';
+            } else {
+                alert('Registration failed: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+    });
+
+    // Forgot password form handler
+    document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const email = document.getElementById('forgot-email').value;
+        
+        // Show loading
+        document.getElementById('loadingOverlay').classList.add('active');
+        
+        try {
+            const result = await Auth.resetPassword(email);
+            
+            if (result.success) {
+                alert('Password reset link sent! Check your email.');
+                showLogin();
+            } else {
+                alert('Failed: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+    });
+</script>
 </body>
 </html>
