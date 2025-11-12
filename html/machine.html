@@ -11,19 +11,43 @@
   <nav class="navbar navbar-dark bg-dark d-md-none">
     <div class="container-fluid">
       <a class="navbar-brand" href="index.html">Predictive Maintenance</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mobileMenu2">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mobileMenu">
         <span class="navbar-toggler-icon"></span>
       </button>
     </div>
-    <div class="collapse bg-dark p-2" id="mobileMenu2">
-      <a class="nav-link text-white" href="index.html">Dashboard</a>
+    <div class="collapse bg-dark p-2" id="mobileMenu">
+      <a class="nav-link text-white" href="index.html">Machines</a>
       <a class="nav-link text-white" href="logs.html">Logs</a>
+      <a class="nav-link text-white" href="status.html">Status Updates</a>
+      <a class="nav-link text-white" href="problems.html">Problems</a>
       <a class="nav-link text-white" href="profile.html">Profile</a>
+      <a class="nav-link text-danger" href="#" id="mobileLogout">🚪 Logout</a>
     </div>
   </nav>
 
-  <div class="main-wrapper d-flex">
-    <div class="content p-4">
+  <div class="app d-flex">
+    <!-- Sidebar (desktop) - Same as other pages -->
+    <aside class="sidebar d-none d-md-flex flex-column align-items-center text-center p-3">
+      <img src="../img/user.jpg" alt="User" class="user-photo mb-2">
+      <div class="user-info">
+        <div class="fw-bold" id="sbName">Demo User</div>
+      </div>
+
+      <nav class="mt-4 w-100">
+        <a class="nav-link" href="index.html">Machines</a>
+        <a class="nav-link" href="logs.html">Logs</a>
+        <a class="nav-link" href="status.html">Status Updates</a>
+        <a class="nav-link" href="problems.html">Problems</a>
+        <a class="nav-link" href="profile.html">Profile</a>
+      </nav>
+
+      <button class="logout-btn mt-auto" id="logoutBtn">
+        🚪 Logout
+      </button>
+    </aside>
+
+    <!-- Content -->
+    <main class="content p-4">
       <div class="mb-4">
         <a href="index.html" class="btn btn-sm btn-outline-secondary">&larr; Back to Machines</a>
       </div>
@@ -87,23 +111,14 @@
           <button type="submit" class="btn btn-primary">Save Changes</button>
         </div>
       </form>
-    </div>
-
-    <aside class="sidebar d-none d-md-flex flex-column align-items-center text-center text-white p-3">
-      <img src="../img/user.jpg" alt="User" class="user-photo mb-2">
-      <div class="user-info">
-        <div class="fw-bold" id="sbN">Demo User</div>
-        <div class="small" id="sbE">demo@example.com</div>
-        <div class="small text-muted mt-1">Machines: <span id="countMd">0</span></div>
-      </div>
-      <a href="profile.html" class="btn btn-sm btn-light edit-btn mt-3">Edit Profile</a>
-    </aside>
+    </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="../js/config.js"></script>
   <script src="../js/common.js"></script>
   <script src="../js/auth.js"></script>
+  <script src="../js/simulator.js"></script>
   <script src="../js/machine.js"></script>
 </body>
 </html>

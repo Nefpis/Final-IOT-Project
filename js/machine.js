@@ -22,8 +22,12 @@
     }
 
     displayMachine(machine);
-    setupStatusButtons(machine);
     setupEditForm(machine);
+    
+    // Refresh lights every 3 seconds
+    setInterval(() => {
+      updateStatusLights();
+    }, 3000);
   }
 
   // Display machine information
@@ -56,27 +60,48 @@
     }
 
     // Update status lights
-    updateStatusLights(machine.status);
+    updateStatusLights();
 
     // Populate edit form
     populateEditForm(machine);
   }
 
-  // Update status light indicators
-  function updateStatusLights(status) {
+  // Update status light indicators using new system
+  function updateStatusLights() {
+    if (!currentMachineId) return;
+
+    const lightStatus = CONFIG.calculateLightStatus(currentMachineId);
+    
     const greenLight = document.getElementById('l-green');
     const yellowLight = document.getElementById('l-yellow');
     const redLight = document.getElementById('l-red');
 
-    if (greenLight) greenLight.classList.toggle('active', status === CONFIG.STATUS.GREEN);
-    if (yellowLight) yellowLight.classList.toggle('active', status === CONFIG.STATUS.YELLOW);
-    if (redLight) redLight.classList.toggle('active', status === CONFIG.STATUS.RED);
+    if (greenLight) {
+      greenLight.className = 'light green';
+      if (lightStatus.green) {
+        greenLight.classList.add('active');
+      } else if (lightStatus.greenDim) {
+        greenLight.classList.add('dim');
+      }
+    }
     
-    // Add blinking effect for red light
-    if (redLight && status === CONFIG.STATUS.RED) {
-      redLight.classList.add('blinking');
-    } else if (redLight) {
-      redLight.classList.remove('blinking');
+    if (yellowLight) {
+      yellowLight.className = 'light yellow';
+      if (lightStatus.yellow) {
+        yellowLight.classList.add('active');
+      } else if (lightStatus.yellowDim) {
+        yellowLight.classList.add('dim');
+      }
+    }
+    
+    if (redLight) {
+      redLight.className = 'light red';
+      if (lightStatus.red) {
+        redLight.classList.add('active');
+        if (lightStatus.redBlink) {
+          redLight.classList.add('blinking');
+        }
+      }
     }
   }
 
@@ -96,16 +121,6 @@
       const element = document.getElementById(id);
       if (element) element.value = value || '';
     });
-  }
-
-  // Status is now controlled by sensor data and predictions
-  // Buttons removed - status updates automatically from ESP32 readings
-  function setupStatusButtons(machine) {
-    // Remove the status simulation buttons from HTML
-    const buttonContainer = document.querySelector('.mt-2.text-end');
-    if (buttonContainer) {
-      buttonContainer.remove();
-    }
   }
 
   // Setup edit form submission

@@ -24,7 +24,7 @@
       <a class="nav-link text-white" href="status.html">Status Updates</a>
       <a class="nav-link text-white" href="problems.html">Problems</a>
       <a class="nav-link text-white" href="profile.html">Profile</a>
-    </div>
+      <a class="nav-link text-danger" href="#" id="mobileLogout">🚪 Logout</a>
   </nav>
 
   <div class="app d-flex">
@@ -44,9 +44,9 @@
         <a class="nav-link" href="profile.html">Profile</a>
       </nav>
 
-      <a class="btn btn-sm btn-light mt-auto mb-2 edit-circle" href="profile.html" title="Edit profile">
-        ✎
-      </a>
+      <button class="logout-btn mt-auto" id="logoutBtn">
+        🚪 Logout
+      </button>
     </aside>
 
     <!-- Content -->
@@ -125,6 +125,7 @@
   <script src="../js/config.js"></script>
   <script src="../js/common.js"></script>
   <script src="../js/auth.js"></script>
+  <script src="../js/simulator.js"></script>
   <script src="../js/index.js"></script>
 </body>
 </html>

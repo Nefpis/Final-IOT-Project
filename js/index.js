@@ -20,6 +20,17 @@
       
       const imgSrc = machine.img || '../img/machine-placeholder.png';
       
+      // Get light status using new system
+      const lightStatus = CONFIG.calculateLightStatus(machine.id);
+      
+      // Build light classes
+      const greenClass = lightStatus.green ? 'active' : (lightStatus.greenDim ? 'dim' : '');
+      const yellowClass = lightStatus.yellow ? 'active' : (lightStatus.yellowDim ? 'dim' : '');
+      const redClass = lightStatus.red ? (lightStatus.redBlink ? 'active blinking' : 'active') : '';
+      
+      // Add work-in-progress class to lights container
+      const wipClass = lightStatus.workInProgress ? 'work-in-progress' : '';
+      
       col.innerHTML = `
         <div class="card card-machine h-100" data-id="${machine.id}">
           <div class="img-wrap">
@@ -30,10 +41,10 @@
           <div class="card-body d-flex flex-column">
             <div class="d-flex align-items-center justify-content-between">
               <h5 class="mb-0">${machine.name}</h5>
-              <div class="status-lights">
-                <span class="light green ${machine.status === 'green' ? 'active' : ''}"></span>
-                <span class="light yellow ${machine.status === 'yellow' ? 'active' : ''}"></span>
-                <span class="light red ${machine.status === 'red' ? 'active' : ''}"></span>
+              <div class="status-lights ${wipClass}" title="${lightStatus.workInProgress ? 'Fix in progress' : ''}">
+                <span class="light green ${greenClass}"></span>
+                <span class="light yellow ${yellowClass}"></span>
+                <span class="light red ${redClass}"></span>
               </div>
             </div>
             <p class="small text-muted mt-2 mb-3">
@@ -82,6 +93,11 @@
     let machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
     machines = machines.filter(m => m.id !== machineId);
     Storage.save(CONFIG.STORAGE_KEYS.MACHINES, machines);
+
+    // Dispatch event for simulator
+    window.dispatchEvent(new CustomEvent('machineDeleted', { 
+      detail: { machineId: machineId } 
+    }));
 
     // Remove related logs
     let logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, []);
@@ -177,6 +193,11 @@
     UI.updateSidebar();
     renderMachines();
     setupAddMachineForm();
+    
+    // Refresh lights every 5 seconds to reflect log changes
+    setInterval(() => {
+      renderMachines();
+    }, 5000);
   }
 
   // Run when DOM is ready

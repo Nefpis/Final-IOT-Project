@@ -16,25 +16,46 @@
     inProgressContainer.innerHTML = '';
     fixedContainer.innerHTML = '';
 
-    if (logs.length === 0) {
-      notFixedContainer.innerHTML = '<div class="text-muted text-center p-3">No logs yet</div>';
-      return;
+    // Separate logs by status
+    const notFixedLogs = logs.filter(l => l.status === CONFIG.LOG_STATUS.NOT_FIXED);
+    const inProgressLogs = logs.filter(l => l.status === CONFIG.LOG_STATUS.IN_PROGRESS);
+    const fixedLogs = logs.filter(l => l.status === CONFIG.LOG_STATUS.FIXED);
+
+    // Update counts
+    const notFixedCount = document.getElementById('notFixedCount');
+    const inProgressCount = document.getElementById('inProgressCount');
+    const fixedCount = document.getElementById('fixedCount');
+    
+    if (notFixedCount) notFixedCount.textContent = notFixedLogs.length;
+    if (inProgressCount) inProgressCount.textContent = inProgressLogs.length;
+    if (fixedCount) fixedCount.textContent = fixedLogs.length;
+
+    // Render empty states or logs
+    if (notFixedLogs.length === 0) {
+      notFixedContainer.innerHTML = '<div class="empty-state"><div>✓</div><div>No critical issues</div></div>';
+    } else {
+      notFixedLogs.forEach(log => {
+        notFixedContainer.appendChild(createLogElement(log));
+      });
     }
 
-    // Separate logs by status
-    logs.forEach(log => {
-      const logElement = createLogElement(log);
-      
-      if (log.status === CONFIG.LOG_STATUS.NOT_FIXED) {
-        notFixedContainer.appendChild(logElement);
-      } else if (log.status === CONFIG.LOG_STATUS.IN_PROGRESS) {
-        inProgressContainer.appendChild(logElement);
-      } else {
-        fixedContainer.appendChild(logElement);
-      }
-    });
+    if (inProgressLogs.length === 0) {
+      inProgressContainer.innerHTML = '<div class="empty-state"><div>✓</div><div>No ongoing fixes</div></div>';
+    } else {
+      inProgressLogs.forEach(log => {
+        inProgressContainer.appendChild(createLogElement(log));
+      });
+    }
 
-    // Attach event listeners
+    if (fixedLogs.length === 0) {
+      fixedContainer.innerHTML = '<div class="empty-state"><div>✓</div><div>No completed fixes yet</div></div>';
+    } else {
+      fixedLogs.forEach(log => {
+        fixedContainer.appendChild(createLogElement(log));
+      });
+    }
+
+    // Attach event listeners after rendering
     attachLogListeners();
   }
 
@@ -83,6 +104,28 @@
       `;
     }
 
+    // Build action buttons based on status
+    let actionButtons = '';
+    if (log.status === CONFIG.LOG_STATUS.NOT_FIXED) {
+      actionButtons = `
+        <button class="btn btn-sm btn-primary btn-start-fix">
+          ▶️ Start Fix
+        </button>
+      `;
+    } else if (log.status === CONFIG.LOG_STATUS.IN_PROGRESS) {
+      actionButtons = `
+        <button class="btn btn-sm btn-success btn-mark-done">
+          ✅ Mark as Done
+        </button>
+      `;
+    } else if (log.status === CONFIG.LOG_STATUS.FIXED) {
+      actionButtons = `
+        <button class="btn btn-sm btn-outline-secondary btn-view-details">
+          👁️ View Details
+        </button>
+      `;
+    }
+
     el.innerHTML = `
       <div class="log-header">
         <div class="log-title">${log.message}</div>
@@ -98,7 +141,9 @@
       </div>
       ${sensorDataHtml}
       ${log.desc ? '<div class="small text-success mt-2"><strong>✅ Fix:</strong> ' + log.desc + '</div>' : ''}
-      <div class="log-actions"></div>
+      <div class="log-actions">
+        ${actionButtons}
+      </div>
     `;
 
     return el;
@@ -107,25 +152,28 @@
   // Attach event listeners to log buttons
   function attachLogListeners() {
     // "Start Fix" buttons
-    document.querySelectorAll('.btn-go').forEach(button => {
+    document.querySelectorAll('.btn-start-fix').forEach(button => {
       button.addEventListener('click', (e) => {
-        const logId = e.target.closest('.log-item').dataset.id;
+        const logItem = e.target.closest('.log-item');
+        const logId = logItem.dataset.id;
         changeLogStatus(logId, CONFIG.LOG_STATUS.IN_PROGRESS);
       });
     });
 
-    // "Done" buttons
-    document.querySelectorAll('.btn-done').forEach(button => {
+    // "Mark as Done" buttons
+    document.querySelectorAll('.btn-mark-done').forEach(button => {
       button.addEventListener('click', (e) => {
-        const logId = e.target.closest('.log-item').dataset.id;
+        const logItem = e.target.closest('.log-item');
+        const logId = logItem.dataset.id;
         showFinishModal(logId);
       });
     });
 
-    // "View" buttons
-    document.querySelectorAll('.btn-view').forEach(button => {
+    // "View Details" buttons
+    document.querySelectorAll('.btn-view-details').forEach(button => {
       button.addEventListener('click', (e) => {
-        const logId = e.target.closest('.log-item').dataset.id;
+        const logItem = e.target.closest('.log-item');
+        const logId = logItem.dataset.id;
         viewLogDetails(logId);
       });
     });
@@ -155,7 +203,10 @@
 
     // Re-render logs
     renderLogs();
-    UI.showAlert('Log status updated', 'success');
+    
+    const statusName = newStatus === CONFIG.LOG_STATUS.IN_PROGRESS ? 'In Progress' : 
+                       newStatus === CONFIG.LOG_STATUS.FIXED ? 'Fixed' : 'Not Fixed';
+    UI.showAlert(`Log moved to ${statusName}`, 'success');
   }
 
   // Show finish modal
@@ -185,13 +236,16 @@
 
     const details = `
 Log Details:
------------
+───────────
 Machine: ${machineName}
 Message: ${log.message}
 Status: ${log.status}
 Timestamp: ${log.timestamp ? Utils.formatDate(log.timestamp) : 'N/A'}
 ${log.faultProbability ? 'Fault Probability: ' + log.faultProbability + '%' : ''}
-${log.desc ? '\nFix Description:\n' + log.desc : '\n(No fix description yet)'}
+${log.temperature ? '\nTemperature: ' + log.temperature + '°C' : ''}
+${log.vibration ? 'Vibration: ' + log.vibration + 'g' : ''}
+${log.sound !== undefined ? 'Sound: ' + log.sound + '%' : ''}
+${log.desc ? '\n\nFix Description:\n' + log.desc : '\n(No fix description yet)'}
     `.trim();
 
     alert(details);
@@ -222,37 +276,11 @@ ${log.desc ? '\nFix Description:\n' + log.desc : '\n(No fix description yet)'}
     });
   }
 
-  // Add action buttons to log elements
-  function updateLogActionButtons() {
-    document.querySelectorAll('.log-item').forEach(logEl => {
-      const logId = logEl.dataset.id;
-      const logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, []);
-      const log = logs.find(l => l.id === logId);
-
-      if (!log) return;
-
-      const actionsDiv = logEl.querySelector('.actions');
-      if (!actionsDiv) return;
-
-      // Add appropriate button based on status
-      if (log.status === CONFIG.LOG_STATUS.NOT_FIXED) {
-        actionsDiv.innerHTML = '<button class="btn btn-sm btn-primary btn-go">Start Fix</button>';
-      } else if (log.status === CONFIG.LOG_STATUS.IN_PROGRESS) {
-        actionsDiv.innerHTML = '<button class="btn btn-sm btn-success btn-done">Done</button>';
-      } else {
-        actionsDiv.innerHTML = '<button class="btn btn-sm btn-outline-secondary btn-view">View</button>';
-      }
-    });
-
-    attachLogListeners();
-  }
-
   // Initialize page
   function init() {
     UI.updateSidebar();
     renderLogs();
     setupFinishForm();
-    updateLogActionButtons();
   }
 
   // Run when DOM is ready
@@ -265,6 +293,5 @@ ${log.desc ? '\nFix Description:\n' + log.desc : '\n(No fix description yet)'}
   // Refresh logs every 5 seconds to show new predictions
   setInterval(() => {
     renderLogs();
-    updateLogActionButtons();
   }, 5000);
 })();

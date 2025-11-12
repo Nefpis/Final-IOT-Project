@@ -1,3 +1,5 @@
+/* login.js - Login & Registration Page Logic */
+
 // Check if already logged in
 if (Auth.isAuthenticated()) {
     window.location.href = 'index.html';
@@ -60,7 +62,8 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         }
     } catch (error) {
         alert('Error: ' + error.message);
-    } finally {
+    } 
+    finally {
         document.getElementById('loadingOverlay').classList.remove('active');
     }
 });
