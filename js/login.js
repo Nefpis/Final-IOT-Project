@@ -1,12 +1,17 @@
 /* login.js - Login & Registration Page Logic */
 
-// Check if already logged in
-if (Auth.isAuthenticated()) {
-    window.location.href = 'index.html';
-}
-
-// Login form handler
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
+// Check if already logged in (using Firebase auth listener)
+Auth.initAuthListener((user) => {
+    if (user) {
+      // User is logged in, redirect to dashboard
+      const redirect = sessionStorage.getItem('redirect_after_login');
+      sessionStorage.removeItem('redirect_after_login');
+      window.location.href = redirect || 'index.html';
+    }
+  });
+  
+  // Login form handler
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const email = document.getElementById('login-email').value;
@@ -16,23 +21,27 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     document.getElementById('loadingOverlay').classList.add('active');
     
     try {
-        const result = await Auth.login(email, password);
+      const result = await Auth.login(email, password);
+      
+      if (result.success) {
+        alert('Login successful! Welcome back.');
         
-        if (result.success) {
-            alert('Login successful! Welcome back.');
-            window.location.href = 'index.html';
-        } else {
-            alert('Login failed: ' + result.error);
-        }
+        // Redirect handled by auth listener
+        const redirect = sessionStorage.getItem('redirect_after_login');
+        sessionStorage.removeItem('redirect_after_login');
+        window.location.href = redirect || 'index.html';
+      } else {
+        alert('Login failed: ' + result.error);
+      }
     } catch (error) {
-        alert('Error: ' + error.message);
+      alert('Error: ' + error.message);
     } finally {
-        document.getElementById('loadingOverlay').classList.remove('active');
+      document.getElementById('loadingOverlay').classList.remove('active');
     }
-});
-
-// Register form handler
-document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  });
+  
+  // Register form handler
+  document.getElementById('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const firstname = document.getElementById('register-firstname').value;
@@ -42,8 +51,8 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
     const terms = document.getElementById('register-check').checked;
     
     if (!terms) {
-        alert('Please accept the terms and conditions');
-        return;
+      alert('Please accept the terms and conditions');
+      return;
     }
     
     const fullName = `${firstname} ${lastname}`;
@@ -52,24 +61,26 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
     document.getElementById('loadingOverlay').classList.add('active');
     
     try {
-        const result = await Auth.register(email, password, fullName);
+      const result = await Auth.register(email, password, fullName);
+      
+      if (result.success) {
+        alert('Registration successful! Welcome to TechPredict.');
         
-        if (result.success) {
-            alert('Registration successful! Welcome to TechPredict.');
-            window.location.href = 'index.html';
-        } else {
-            alert('Registration failed: ' + result.error);
-        }
+        // Redirect handled by auth listener
+        window.location.href = 'index.html';
+      } else {
+        alert('Registration failed: ' + result.error);
+      }
     } catch (error) {
-        alert('Error: ' + error.message);
+      alert('Error: ' + error.message);
     } 
     finally {
-        document.getElementById('loadingOverlay').classList.remove('active');
+      document.getElementById('loadingOverlay').classList.remove('active');
     }
-});
-
-// Forgot password form handler
-document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+  });
+  
+  // Forgot password form handler
+  document.getElementById('forgotForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const email = document.getElementById('forgot-email').value;
@@ -78,18 +89,18 @@ document.getElementById('forgotForm').addEventListener('submit', async (e) => {
     document.getElementById('loadingOverlay').classList.add('active');
     
     try {
-        const result = await Auth.resetPassword(email);
-        
-        if (result.success) {
-            alert('Password reset link sent! Check your email.');
-            showLogin();
-        } else {
-            alert('Failed: ' + result.error);
-        }
+      const result = await Auth.resetPassword(email);
+      
+      if (result.success) {
+        alert(result.message);
+        showLogin();
+      } else {
+        alert('Failed: ' + result.error);
+      }
     } catch (error) {
-        alert('Error: ' + error.message);
+      alert('Error: ' + error.message);
     } 
     finally {
-        document.getElementById('loadingOverlay').classList.remove('active');
+      document.getElementById('loadingOverlay').classList.remove('active');
     }
-});
+  });
