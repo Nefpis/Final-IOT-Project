@@ -1,12 +1,15 @@
-/* index.js - Machines Dashboard Page */
+/* index.js - Machines Dashboard (NOW USING FIRESTORE) */
 
 (() => {
+  let unsubscribeMachines = null;
+  let unsubscribeLogs = null;
+
   // Render machines grid
   function renderMachines() {
     const container = document.getElementById('machinesRow');
     if (!container) return;
 
-    const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
+    const machines = Storage._cache.machines;
     container.innerHTML = '';
 
     if (machines.length === 0) {
@@ -20,15 +23,12 @@
       
       const imgSrc = machine.img || '../img/machine-placeholder.png';
       
-      // Get light status using new system
       const lightStatus = CONFIG.calculateLightStatus(machine.id);
       
-      // Build light classes
       const greenClass = lightStatus.green ? 'active' : (lightStatus.greenDim ? 'dim' : '');
       const yellowClass = lightStatus.yellow ? 'active' : (lightStatus.yellowDim ? 'dim' : '');
       const redClass = lightStatus.red ? (lightStatus.redBlink ? 'active blinking' : 'active') : '';
       
-      // Add work-in-progress class to lights container
       const wipClass = lightStatus.workInProgress ? 'work-in-progress' : '';
       
       col.innerHTML = `
@@ -61,13 +61,10 @@
       container.appendChild(col);
     });
 
-    // Attach event listeners
     attachMachineCardListeners();
   }
 
-  // Attach event listeners to machine cards
   function attachMachineCardListeners() {
-    // Open button
     document.querySelectorAll('.btn-open').forEach(button => {
       button.addEventListener('click', (e) => {
         const machineId = e.target.closest('.card').dataset.id;
@@ -76,54 +73,40 @@
       });
     });
 
-    // Delete button
     document.querySelectorAll('.btn-delete').forEach(button => {
-      button.addEventListener('click', (e) => {
+      button.addEventListener('click', async (e) => {
         if (!UI.confirm('Are you sure you want to delete this machine?')) return;
         
         const machineId = e.target.closest('.card').dataset.id;
-        deleteMachine(machineId);
+        await deleteMachine(machineId);
       });
     });
   }
 
-  // Delete machine
-  function deleteMachine(machineId) {
-    // Remove machine
-    let machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
-    machines = machines.filter(m => m.id !== machineId);
-    Storage.save(CONFIG.STORAGE_KEYS.MACHINES, machines);
-
-    // Dispatch event for simulator
-    window.dispatchEvent(new CustomEvent('machineDeleted', { 
-      detail: { machineId: machineId } 
-    }));
-
-    // Remove related logs
-    let logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, []);
-    logs = logs.filter(l => l.machineId !== machineId);
-    Storage.save(CONFIG.STORAGE_KEYS.LOGS, logs);
-
-    // Remove related reports
-    let reports = Storage.load(CONFIG.STORAGE_KEYS.REPORTS, []);
-    reports = reports.filter(r => r.machineId !== machineId);
-    Storage.save(CONFIG.STORAGE_KEYS.REPORTS, reports);
-
-    // Re-render and update UI
-    renderMachines();
-    UI.updateSidebar();
-    UI.showAlert('Machine deleted successfully', 'success');
+  async function deleteMachine(machineId) {
+    // Delete from Firestore
+    const result = await FirestoreDB.deleteMachine(machineId);
+    
+    if (result.success) {
+      // Delete related logs
+      const logs = Storage._cache.logs.filter(l => l.machineId === machineId);
+      for (const log of logs) {
+        await FirestoreDB.deleteLog(log.id);
+      }
+      
+      UI.showAlert('Machine deleted successfully', 'success');
+    } else {
+      UI.showAlert('Failed to delete machine: ' + result.error, 'error');
+    }
   }
 
-  // Handle add machine form
   function setupAddMachineForm() {
     const addForm = document.getElementById('addForm');
     if (!addForm) return;
 
-    addForm.addEventListener('submit', (e) => {
+    addForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      // Get form values
       const formData = {
         name: document.getElementById('new-name').value.trim(),
         img: document.getElementById('new-img').value.trim(),
@@ -134,14 +117,12 @@
         interval: Number(document.getElementById('new-interval').value) || CONFIG.DEFAULT_REPORT_INTERVAL
       };
 
-      // Validate input
       const validation = Validator.validateMachineData(formData);
       if (!validation.isValid) {
         Validator.showErrors(validation.errors);
         return;
       }
 
-      // Process image URL
       formData.img = Utils.formatImageUrl(formData.img);
       if (formData.img.includes('google.com/imgres')) {
         const extracted = Utils.extractImageUrl(formData.img);
@@ -151,9 +132,7 @@
         }
       }
 
-      // Create new machine
       const newMachine = {
-        id: Utils.uid('m'),
         name: formData.name || 'Unnamed Machine',
         img: formData.img,
         minTemp: formData.minTemp,
@@ -162,48 +141,75 @@
         maxVib: formData.maxVib,
         interval: formData.interval,
         status: CONFIG.STATUS.GREEN,
-        notes: '',
-        createdAt: Utils.nowISO()
+        notes: ''
       };
 
-      // Save to storage
-      const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
-      machines.push(newMachine);
-      Storage.save(CONFIG.STORAGE_KEYS.MACHINES, machines);
+      // Add to Firestore
+      const result = await FirestoreDB.addMachine(newMachine);
 
-      // Dispatch event for simulator
-      window.dispatchEvent(new CustomEvent('machineAdded', { 
-        detail: { machine: newMachine } 
-      }));
-
-      // Close modal and reset form
-      const modal = bootstrap.Modal.getInstance(document.getElementById('addModal'));
-      if (modal) modal.hide();
-      addForm.reset();
-
-      // Update UI
-      renderMachines();
-      UI.updateSidebar();
-      UI.showAlert('Machine added successfully!', 'success');
+      if (result.success) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addModal'));
+        if (modal) modal.hide();
+        addForm.reset();
+        
+        UI.showAlert('Machine added successfully!', 'success');
+      } else {
+        UI.showAlert('Failed to add machine: ' + result.error, 'error');
+      }
     });
   }
 
-  // Initialize page
-  function init() {
-    UI.updateSidebar();
-    renderMachines();
-    setupAddMachineForm();
-    
-    // Refresh lights every 5 seconds to reflect log changes
-    setInterval(() => {
+  // Setup real-time listeners
+  function setupRealtimeListeners() {
+    // Listen to machines
+    unsubscribeMachines = FirestoreDB.listenToMachines((machines) => {
+      Storage._cache.machines = machines;
       renderMachines();
-    }, 5000);
+      UI.updateSidebar();
+    });
+
+    // Listen to logs (needed for light status)
+    unsubscribeLogs = FirestoreDB.listenToLogs((logs) => {
+      Storage._cache.logs = logs;
+      renderMachines(); // Re-render to update lights
+    });
   }
 
-  // Run when DOM is ready
+  async function init() {
+    // Check authentication
+   /* if (!Auth.isAuthenticated()) {
+      window.location.href = 'login-registration.html';
+      return;
+    }*/
+
+    setupRealtimeListeners();
+    setupAddMachineForm();
+    UI.updateSidebar();
+  }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (unsubscribeMachines) unsubscribeMachines();
+    if (unsubscribeLogs) unsubscribeLogs();
+  });
+
+  function startApp() {
+    Auth.initAuthListener((user) => {
+      if (user) {
+        console.log("User found");
+        // User is logged in, NOW we can initialize the page.
+        init(); 
+      } else {
+        // No user, redirect to login.
+        console.log("No user found, redirecting to login...");
+        window.location.href = 'login-registration.html';
+      }
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', startApp);
   } else {
-    init();
+    startApp();
   }
 })();

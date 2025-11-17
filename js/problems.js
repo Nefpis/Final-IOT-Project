@@ -1,12 +1,14 @@
-/* problems.js - Problems Database Page */
+/* problems.js - Problems Database Page (FIRESTORE) */
 
 (() => {
+  let unsubscribeProblems = null;
+
   // Render problems list
   function renderProblems() {
     const container = document.getElementById('problemsList');
     if (!container) return;
 
-    const problems = Storage.load(CONFIG.STORAGE_KEYS.PROBLEMS, []);
+    const problems = Storage._cache.problems;
     container.innerHTML = '';
 
     if (problems.length === 0) {
@@ -14,15 +16,22 @@
       return;
     }
 
+    const currentUserId = Firebase.getCurrentUserId();
+
     problems.forEach(problem => {
       const card = document.createElement('div');
       card.className = 'problem-card';
       card.dataset.id = problem.id;
 
+      // Only show delete button if user created this problem
+      const deleteButton = problem.createdByUserId === currentUserId 
+        ? `<button class="btn btn-sm btn-outline-danger btn-delete-problem" title="Delete">×</button>`
+        : '';
+
       card.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-2">
           <h5 class="mb-0">${problem.title}</h5>
-          <button class="btn btn-sm btn-outline-danger btn-delete-problem" title="Delete">×</button>
+          ${deleteButton}
         </div>
         <p class="mb-2">${problem.description}</p>
         ${problem.videoUrl ? `
@@ -31,7 +40,8 @@
           </div>
         ` : ''}
         <div class="small text-muted">
-          Added: ${problem.createdAt ? Utils.formatDate(problem.createdAt) : 'Unknown'}
+          Added by: ${problem.createdBy || 'Unknown'} • 
+          ${problem.createdAt ? Utils.formatDate(problem.createdAt) : 'Unknown date'}
         </div>
       `;
 
@@ -45,24 +55,30 @@
   // Attach delete listeners to problem cards
   function attachProblemDeleteListeners() {
     document.querySelectorAll('.btn-delete-problem').forEach(button => {
-      button.addEventListener('click', (e) => {
+      button.addEventListener('click', async (e) => {
         if (!UI.confirm('Are you sure you want to delete this problem?')) return;
 
         const card = e.target.closest('.problem-card');
         const problemId = card.dataset.id;
-        deleteProblem(problemId);
+        
+        // Find problem to get createdByUserId
+        const problem = Storage._cache.problems.find(p => p.id === problemId);
+        if (!problem) return;
+
+        await deleteProblem(problemId, problem.createdByUserId);
       });
     });
   }
 
-  // Delete problem
-  function deleteProblem(problemId) {
-    let problems = Storage.load(CONFIG.STORAGE_KEYS.PROBLEMS, []);
-    problems = problems.filter(p => p.id !== problemId);
-    Storage.save(CONFIG.STORAGE_KEYS.PROBLEMS, problems);
+  // Delete problem - FIRESTORE
+  async function deleteProblem(problemId, createdByUserId) {
+    const result = await FirestoreDB.deleteProblem(problemId, createdByUserId);
     
-    renderProblems();
-    UI.showAlert('Problem deleted successfully', 'success');
+    if (result.success) {
+      UI.showAlert('Problem deleted successfully', 'success');
+    } else {
+      UI.showAlert('Failed to delete: ' + result.error, 'error');
+    }
   }
 
   // Setup add problem form
@@ -70,7 +86,7 @@
     const form = document.getElementById('problemForm');
     if (!form) return;
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       // Get form values
@@ -95,35 +111,21 @@
         return;
       }
 
-      // Create new problem
-      const newProblem = {
-        id: Utils.uid('p'),
+      // Add to Firestore
+      const result = await FirestoreDB.addProblem({
         title: title,
         description: description,
-        videoUrl: videoUrl,
-        createdAt: Utils.nowISO(),
-        createdBy: getCurrentUserName()  // Add user attribution
-      };
+        videoUrl: videoUrl
+      });
 
-      // Save
-      const problems = Storage.load(CONFIG.STORAGE_KEYS.PROBLEMS, []);
-      problems.unshift(newProblem); // Add to beginning
-      Storage.save(CONFIG.STORAGE_KEYS.PROBLEMS, problems);
-
-      // Reset form and re-render
-      form.reset();
-      renderProblems();
-      UI.showAlert('Problem added successfully! Now visible to all users.', 'success');
-
-      // Scroll to top to see new problem
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (result.success) {
+        form.reset();
+        UI.showAlert('Problem added successfully! Now visible to all users.', 'success');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        UI.showAlert('Failed to add problem: ' + result.error, 'error');
+      }
     });
-  }
-
-  // Get current user's name
-  function getCurrentUserName() {
-    const profile = Storage.load(CONFIG.STORAGE_KEYS.PROFILE, {});
-    return profile.name || `${profile.firstname || 'Anonymous'} ${profile.lastname || 'User'}`;
   }
 
   // Search/filter problems
@@ -133,7 +135,7 @@
 
     searchInput.addEventListener('input', (e) => {
       const searchTerm = e.target.value.toLowerCase();
-      const problems = Storage.load(CONFIG.STORAGE_KEYS.PROBLEMS, []);
+      const problems = Storage._cache.problems;
 
       if (!searchTerm) {
         renderProblems();
@@ -157,15 +159,21 @@
         return;
       }
 
+      const currentUserId = Firebase.getCurrentUserId();
+
       filtered.forEach(problem => {
         const card = document.createElement('div');
         card.className = 'problem-card';
         card.dataset.id = problem.id;
 
+        const deleteButton = problem.createdByUserId === currentUserId 
+          ? `<button class="btn btn-sm btn-outline-danger btn-delete-problem" title="Delete">×</button>`
+          : '';
+
         card.innerHTML = `
           <div class="d-flex justify-content-between align-items-start mb-2">
             <h5 class="mb-0">${problem.title}</h5>
-            <button class="btn btn-sm btn-outline-danger btn-delete-problem" title="Delete">×</button>
+            ${deleteButton}
           </div>
           <p class="mb-2">${problem.description}</p>
           ${problem.videoUrl ? `
@@ -174,7 +182,8 @@
             </div>
           ` : ''}
           <div class="small text-muted">
-            Added: ${problem.createdAt ? Utils.formatDate(problem.createdAt) : 'Unknown'}
+            Added by: ${problem.createdBy || 'Unknown'} • 
+            ${problem.createdAt ? Utils.formatDate(problem.createdAt) : 'Unknown'}
           </div>
         `;
 
@@ -185,18 +194,45 @@
     });
   }
 
+  // Setup real-time listener
+  function setupRealtimeListener() {
+    unsubscribeProblems = FirestoreDB.listenToProblems((problems) => {
+      Storage._cache.problems = problems;
+      renderProblems();
+    });
+  }
+
   // Initialize page
   function init() {
     UI.updateSidebar();
-    renderProblems();
+    setupRealtimeListener();
     setupProblemForm();
     setupSearch();
   }
 
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (unsubscribeProblems) unsubscribeProblems();
+  });
+
+  function startApp() {
+    Auth.initAuthListener((user) => {
+      if (user) {
+        console.log("User found");
+        // User is logged in, NOW we can initialize the page.
+        init(); 
+      } else {
+        // No user, redirect to login.
+        console.log("No user found, redirecting to login...");
+        window.location.href = 'login-registration.html';
+      }
+    });
+  }
+
   // Run when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', startApp);
   } else {
-    init();
+    startApp();
   }
 })();

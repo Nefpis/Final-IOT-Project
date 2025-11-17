@@ -1,8 +1,8 @@
-/* common.js - Shared Utilities and Functions */
+/* common.js - Shared Utilities (NOW USING FIRESTORE) */
 
 // Utility functions
 const Utils = {
-  // Generate unique ID
+  // Generate unique ID (NOT NEEDED - Firestore auto-generates)
   uid: (prefix = 'id') => {
     return prefix + Math.random().toString(36).slice(2, 9);
   },
@@ -14,6 +14,13 @@ const Utils = {
 
   // Format date for display
   formatDate: (isoString) => {
+    if (!isoString) return 'N/A';
+    
+    // Handle Firestore Timestamp
+    if (isoString.toDate) {
+      return isoString.toDate().toLocaleString();
+    }
+    
     return new Date(isoString).toLocaleString();
   },
 
@@ -21,7 +28,6 @@ const Utils = {
   extractImageUrl: (url) => {
     if (!url) return null;
     
-    // Check if it's a Google Images URL
     if (url.includes('google.com/imgres')) {
       const match = url.match(/imgurl=([^&]+)/);
       if (match) {
@@ -37,15 +43,12 @@ const Utils = {
       return '../img/machine-placeholder.png';
     }
     
-    // Extract from Google Images if needed
     imgValue = Utils.extractImageUrl(imgValue);
     
-    // If it's a full URL, use it
     if (imgValue.startsWith('http')) {
       return imgValue;
     }
     
-    // If it doesn't have the img folder prefix, add it
     if (!imgValue.startsWith('../img/')) {
       return '../img/' + imgValue;
     }
@@ -54,15 +57,13 @@ const Utils = {
   }
 };
 
-// Validator object for input validation
+// Validator object (unchanged)
 const Validator = {
-  // Email validation
   isValidEmail: (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   },
 
-  // URL validation
   isValidUrl: (url) => {
     try {
       new URL(url);
@@ -72,27 +73,22 @@ const Validator = {
     }
   },
 
-  // Number range validation
   isInRange: (value, min, max) => {
     const num = Number(value);
     return !isNaN(num) && num >= min && num <= max;
   },
 
-  // Required field validation
   isNotEmpty: (value) => {
     return value !== null && value !== undefined && String(value).trim() !== '';
   },
 
-  // Machine data validation
   validateMachineData: (data) => {
     const errors = [];
 
-    // Name is required
     if (!Validator.isNotEmpty(data.name)) {
       errors.push('Machine name is required');
     }
 
-    // Temperature range validation
     if (data.minTemp !== undefined && data.maxTemp !== undefined) {
       if (Number(data.minTemp) >= Number(data.maxTemp)) {
         errors.push('Min temperature must be less than max temperature');
@@ -105,7 +101,6 @@ const Validator = {
       }
     }
 
-    // Vibration range validation
     if (data.minVib !== undefined && data.maxVib !== undefined) {
       if (Number(data.minVib) >= Number(data.maxVib)) {
         errors.push('Min vibration must be less than max vibration');
@@ -115,14 +110,12 @@ const Validator = {
       }
     }
 
-    // Interval validation
     if (data.interval !== undefined) {
       if (!Validator.isInRange(data.interval, 1, 3600)) {
         errors.push('Report interval must be between 1 and 3600 seconds');
       }
     }
 
-    // Image URL validation (if provided)
     if (data.img && data.img.startsWith('http')) {
       if (!Validator.isValidUrl(data.img)) {
         errors.push('Invalid image URL format');
@@ -135,32 +128,27 @@ const Validator = {
     };
   },
 
-  // Sensor data validation (for ESP32 readings)
   validateSensorData: (data) => {
     const errors = [];
 
-    // Temperature validation
     if (data.temperature !== undefined) {
       if (!Validator.isInRange(data.temperature, -50, 200)) {
         errors.push('Temperature reading out of valid range (-50 to 200°C)');
       }
     }
 
-    // Vibration validation
     if (data.vibration !== undefined) {
       if (Number(data.vibration) < 0 || Number(data.vibration) > 100) {
         errors.push('Vibration reading out of valid range (0 to 100g)');
       }
     }
 
-    // Sound validation (0-100 scale from Teachable Machine)
     if (data.sound !== undefined) {
       if (!Validator.isInRange(data.sound, 0, 100)) {
         errors.push('Sound reading out of valid range (0 to 100)');
       }
     }
 
-    // Timestamp validation
     if (data.timestamp) {
       const timestamp = new Date(data.timestamp);
       if (isNaN(timestamp.getTime())) {
@@ -174,7 +162,6 @@ const Validator = {
     };
   },
 
-  // Profile data validation
   validateProfileData: (data) => {
     const errors = [];
 
@@ -194,7 +181,6 @@ const Validator = {
     };
   },
 
-  // Display validation errors
   showErrors: (errors) => {
     if (errors.length > 0) {
       alert('Validation Errors:\n\n' + errors.join('\n'));
@@ -202,21 +188,41 @@ const Validator = {
   }
 };
 
-// Storage Manager (will be replaced with Firebase)
+// Storage Manager - NOW USES FIRESTORE!
 const Storage = {
-  // Save data
-  save: (key, value) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (error) {
-      console.error('Storage save error:', error);
-      return false;
-    }
+  // These are WRAPPERS for backward compatibility
+  // Real data comes from Firestore
+  
+  _cache: {
+    machines: [],
+    logs: [],
+    reports: [],
+    problems: [],
+    profile: null
   },
 
-  // Load data
+  // Load data (from cache or Firestore)
   load: (key, defaultValue = []) => {
+    // For backward compatibility with old code
+    // Return cached data (updated by listeners)
+    
+    if (key === CONFIG.STORAGE_KEYS.MACHINES) {
+      return Storage._cache.machines;
+    }
+    if (key === CONFIG.STORAGE_KEYS.LOGS) {
+      return Storage._cache.logs;
+    }
+    if (key === CONFIG.STORAGE_KEYS.REPORTS) {
+      return Storage._cache.reports;
+    }
+    if (key === CONFIG.STORAGE_KEYS.PROBLEMS) {
+      return Storage._cache.problems;
+    }
+    if (key === CONFIG.STORAGE_KEYS.PROFILE) {
+      return Storage._cache.profile || defaultValue;
+    }
+    
+    // Fallback to localStorage for other keys
     try {
       const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : defaultValue;
@@ -226,7 +232,19 @@ const Storage = {
     }
   },
 
-  // Remove data
+  // Save is handled by Firestore operations now
+  save: (key, value) => {
+    console.warn('Storage.save() called - should use FirestoreDB methods instead');
+    // Keep for temporary data like selectedMachine
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      console.error('Storage save error:', error);
+      return false;
+    }
+  },
+
   remove: (key) => {
     try {
       localStorage.removeItem(key);
@@ -237,7 +255,6 @@ const Storage = {
     }
   },
 
-  // Clear all data
   clear: () => {
     try {
       localStorage.clear();
@@ -251,7 +268,6 @@ const Storage = {
 
 // UI Helper functions
 const UI = {
-  // Show loading indicator
   showLoading: (elementId) => {
     const el = document.getElementById(elementId);
     if (el) {
@@ -259,7 +275,6 @@ const UI = {
     }
   },
 
-  // Hide loading indicator
   hideLoading: (elementId) => {
     const el = document.getElementById(elementId);
     if (el) {
@@ -267,43 +282,42 @@ const UI = {
     }
   },
 
-  // Show alert message
   showAlert: (message, type = 'info') => {
-    alert(message); // Will be replaced with better UI later
+    alert(message);
   },
 
-  // Confirm dialog
   confirm: (message) => {
     return window.confirm(message);
   },
 
-  // Update sidebar counts and user info
-  updateSidebar: () => {
-    const profile = Storage.load(CONFIG.STORAGE_KEYS.PROFILE, {
-      firstname: 'Demo',
-      lastname: 'User',
-      name: 'Demo User',
-      email: 'demo@example.com',
-      photo: '../img/user.jpg'
-    });
+  // Update sidebar - NOW USES FIRESTORE
+  updateSidebar: async () => {
+    UI.setupLogoutButton();
+    const userId = Firebase.getCurrentUserId();
+    if (!userId) return;
 
-    // Build full name
+    // Get profile from Firestore
+    const profile = await FirestoreDB.getUserProfile();
+    
+    if (!profile) {
+      console.warn('No profile found');
+      return;
+    }
+
     const fullName = profile.name || `${profile.firstname || 'Demo'} ${profile.lastname || 'User'}`;
 
-    // Update name
     const nameElements = document.querySelectorAll('#sbName, #sbN, #sbN2');
     nameElements.forEach(el => {
       if (el) el.textContent = fullName;
     });
 
-    // Update email
     const emailElements = document.querySelectorAll('#sbEmail, #sbE, #sbE2');
     emailElements.forEach(el => {
       if (el) el.textContent = profile.email;
     });
 
-    // Update machine count
-    const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
+    // Get machine count from cache
+    const machines = Storage._cache.machines;
     const countElements = document.querySelectorAll('#sbCount, #profileMachines, #countMd');
     countElements.forEach(el => {
       if (el) {
@@ -311,12 +325,10 @@ const UI = {
       }
     });
 
-    // Update profile photo - CRITICAL FIX
     const photoUrl = profile.photo || '../img/user.jpg';
     const photoElements = document.querySelectorAll('.user-photo');
     photoElements.forEach(el => {
       if (el) {
-        // Force update by setting src directly
         el.src = photoUrl;
         el.onerror = function() {
           this.onerror = null;
@@ -325,10 +337,9 @@ const UI = {
       }
     });
 
-    // Setup logout button (common for all pages)
-    UI.setupLogoutButton();
+    
   },
-  // Setup logout button functionality (called from updateSidebar)
+
   setupLogoutButton: () => {
     const logoutBtn = document.getElementById('logoutBtn');
     const mobileLogout = document.getElementById('mobileLogout');
@@ -348,13 +359,11 @@ const UI = {
       }
     };
 
-    // Desktop logout button
     if (logoutBtn && !logoutBtn.hasAttribute('data-logout-initialized')) {
       logoutBtn.setAttribute('data-logout-initialized', 'true');
       logoutBtn.addEventListener('click', handleLogout);
     }
 
-    // Mobile logout button
     if (mobileLogout && !mobileLogout.hasAttribute('data-logout-initialized')) {
       mobileLogout.setAttribute('data-logout-initialized', 'true');
       mobileLogout.addEventListener('click', (e) => {
@@ -365,49 +374,35 @@ const UI = {
   }
 };
 
-// Machine Status Manager
+// Machine Status Manager - NOW USES FIRESTORE
 const MachineStatus = {
-  // Sync machine status based on logs
   syncFromLogs: (machineId) => {
-    const logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, [])
-      .filter(l => l.machineId === machineId);
+    const logs = Storage._cache.logs.filter(l => l.machineId === machineId);
     
     const hasNotFixed = logs.some(l => l.status === CONFIG.LOG_STATUS.NOT_FIXED);
     const hasInProgress = logs.some(l => l.status === CONFIG.LOG_STATUS.IN_PROGRESS);
     
-    const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
-    const machineIndex = machines.findIndex(m => m.id === machineId);
+    const machines = Storage._cache.machines;
+    const machine = machines.find(m => m.id === machineId);
     
-    if (machineIndex === -1) return;
+    if (!machine) return;
     
-    // Update status based on logs
+    let newStatus = CONFIG.STATUS.GREEN;
     if (hasNotFixed) {
-      machines[machineIndex].status = CONFIG.STATUS.RED;
+      newStatus = CONFIG.STATUS.RED;
     } else if (hasInProgress) {
-      machines[machineIndex].status = CONFIG.STATUS.YELLOW;
-    } else {
-      machines[machineIndex].status = CONFIG.STATUS.GREEN;
+      newStatus = CONFIG.STATUS.YELLOW;
     }
     
-    Storage.save(CONFIG.STORAGE_KEYS.MACHINES, machines);
+    // Update in Firestore
+    FirestoreDB.updateMachine(machineId, { status: newStatus });
   },
 
-  // Update machine status directly
   updateStatus: (machineId, newStatus) => {
-    const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
-    const machineIndex = machines.findIndex(m => m.id === machineId);
-    
-    if (machineIndex !== -1) {
-      machines[machineIndex].status = newStatus;
-      Storage.save(CONFIG.STORAGE_KEYS.MACHINES, machines);
-      return true;
-    }
-    return false;
+    FirestoreDB.updateMachine(machineId, { status: newStatus });
   },
 
-  // Get machine by ID
   getById: (machineId) => {
-    const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
-    return machines.find(m => m.id === machineId) || null;
+    return Storage._cache.machines.find(m => m.id === machineId) || null;
   }
 };

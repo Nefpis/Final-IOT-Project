@@ -1,6 +1,9 @@
-/* logs.js - Logs & Predictions Page */
+/* logs.js - Logs & Predictions Page (FIRESTORE REAL-TIME) */
 
 (() => {
+  let unsubscribeLogs = null;
+  let unsubscribeMachines = null;
+
   // Render logs by status
   function renderLogs() {
     const notFixedContainer = document.getElementById('notFixed');
@@ -9,7 +12,7 @@
 
     if (!notFixedContainer) return;
 
-    const logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, []);
+    const logs = Storage._cache.logs;
     
     // Clear containers
     notFixedContainer.innerHTML = '';
@@ -153,10 +156,10 @@
   function attachLogListeners() {
     // "Start Fix" buttons
     document.querySelectorAll('.btn-start-fix').forEach(button => {
-      button.addEventListener('click', (e) => {
+      button.addEventListener('click', async (e) => {
         const logItem = e.target.closest('.log-item');
         const logId = logItem.dataset.id;
-        changeLogStatus(logId, CONFIG.LOG_STATUS.IN_PROGRESS);
+        await changeLogStatus(logId, CONFIG.LOG_STATUS.IN_PROGRESS);
       });
     });
 
@@ -179,34 +182,31 @@
     });
   }
 
-  // Change log status
-  function changeLogStatus(logId, newStatus, description = '') {
-    const logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, []);
-    const logIndex = logs.findIndex(l => l.id === logId);
+  // Change log status - NOW USES FIRESTORE
+  async function changeLogStatus(logId, newStatus, description = '') {
+    const updates = {
+      status: newStatus
+    };
 
-    if (logIndex === -1) {
-      UI.showAlert('Log not found', 'error');
-      return;
-    }
-
-    // Update log
-    logs[logIndex].status = newStatus;
     if (description) {
-      logs[logIndex].desc = description;
+      updates.desc = description;
     }
-    logs[logIndex].updatedAt = Utils.nowISO();
 
-    Storage.save(CONFIG.STORAGE_KEYS.LOGS, logs);
+    const result = await FirestoreDB.updateLog(logId, updates);
 
-    // Update machine status based on logs
-    MachineStatus.syncFromLogs(logs[logIndex].machineId);
+    if (result.success) {
+      // Find log to get machine ID
+      const log = Storage._cache.logs.find(l => l.id === logId);
+      if (log) {
+        MachineStatus.syncFromLogs(log.machineId);
+      }
 
-    // Re-render logs
-    renderLogs();
-    
-    const statusName = newStatus === CONFIG.LOG_STATUS.IN_PROGRESS ? 'In Progress' : 
-                       newStatus === CONFIG.LOG_STATUS.FIXED ? 'Fixed' : 'Not Fixed';
-    UI.showAlert(`Log moved to ${statusName}`, 'success');
+      const statusName = newStatus === CONFIG.LOG_STATUS.IN_PROGRESS ? 'In Progress' : 
+                         newStatus === CONFIG.LOG_STATUS.FIXED ? 'Fixed' : 'Not Fixed';
+      UI.showAlert(`Log moved to ${statusName}`, 'success');
+    } else {
+      UI.showAlert('Failed to update log: ' + result.error, 'error');
+    }
   }
 
   // Show finish modal
@@ -223,8 +223,7 @@
 
   // View log details
   function viewLogDetails(logId) {
-    const logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, []);
-    const log = logs.find(l => l.id === logId);
+    const log = Storage._cache.logs.find(l => l.id === logId);
 
     if (!log) {
       UI.showAlert('Log not found', 'error');
@@ -256,7 +255,7 @@ ${log.desc ? '\n\nFix Description:\n' + log.desc : '\n(No fix description yet)'}
     const finishForm = document.getElementById('finishForm');
     if (!finishForm) return;
 
-    finishForm.addEventListener('submit', (e) => {
+    finishForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const logId = document.getElementById('finishId').value;
@@ -268,7 +267,7 @@ ${log.desc ? '\n\nFix Description:\n' + log.desc : '\n(No fix description yet)'}
       }
 
       // Update log to fixed status
-      changeLogStatus(logId, CONFIG.LOG_STATUS.FIXED, description);
+      await changeLogStatus(logId, CONFIG.LOG_STATUS.FIXED, description);
 
       // Close modal
       const modal = bootstrap.Modal.getInstance(document.getElementById('finishModal'));
@@ -276,22 +275,53 @@ ${log.desc ? '\n\nFix Description:\n' + log.desc : '\n(No fix description yet)'}
     });
   }
 
+  // Setup real-time listeners
+  function setupRealtimeListeners() {
+    // Listen to logs
+    unsubscribeLogs = FirestoreDB.listenToLogs((logs) => {
+      Storage._cache.logs = logs;
+      renderLogs();
+    });
+
+    // Listen to machines (for machine names)
+    unsubscribeMachines = FirestoreDB.listenToMachines((machines) => {
+      Storage._cache.machines = machines;
+      renderLogs(); // Re-render to update machine names
+    });
+  }
+
   // Initialize page
   function init() {
-    UI.updateSidebar();
-    renderLogs();
+
+    setupRealtimeListeners();
     setupFinishForm();
+    UI.updateSidebar();
+  }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (unsubscribeLogs) unsubscribeLogs();
+    if (unsubscribeMachines) unsubscribeMachines();
+  });
+
+  function startApp() {
+    Auth.initAuthListener((user) => {
+      if (user) {
+        console.log("User found");
+        // User is logged in, NOW we can initialize the page.
+        init(); 
+      } else {
+        // No user, redirect to login.
+        console.log("No user found, redirecting to login...");
+        window.location.href = 'login-registration.html';
+      }
+    });
   }
 
   // Run when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', startApp);
   } else {
-    init();
+    startApp();
   }
-
-  // Refresh logs every 5 seconds to show new predictions
-  setInterval(() => {
-    renderLogs();
-  }, 5000);
 })();

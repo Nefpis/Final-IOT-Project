@@ -1,36 +1,30 @@
-/* profile.js - Profile Page */
+/* profile.js - Profile Page (FIRESTORE) */
 
 (() => {
   // Load and display profile
-  function loadProfile() {
-    const profile = Storage.load(CONFIG.STORAGE_KEYS.PROFILE, {
-      firstname: 'Demo',
-      lastname: 'User',
-      name: 'Demo User',
-      email: 'demo@example.com',
-      photo: '../img/user.jpg'
-    });
-
-    // Display profile info
-    displayProfile(profile);
+  async function loadProfile() {
+    const profile = await FirestoreDB.getUserProfile();
     
-    // Update statistics
+    if (!profile) {
+      console.warn('No profile found, using defaults');
+      return;
+    }
+
+    Storage._cache.profile = profile;
+    displayProfile(profile);
     updateStatistics();
   }
 
   // Display profile information
   function displayProfile(profile) {
-    // Build full name
     const fullName = profile.name || `${profile.firstname || 'Demo'} ${profile.lastname || 'User'}`;
     
-    // Update header
     const nameDisplay = document.getElementById('profileNameDisplay');
     const emailDisplay = document.getElementById('profileEmailDisplay');
     
     if (nameDisplay) nameDisplay.textContent = fullName;
     if (emailDisplay) emailDisplay.textContent = profile.email || 'demo@example.com';
 
-    // Update info fields
     const firstNameDisplay = document.getElementById('displayFirstName');
     const lastNameDisplay = document.getElementById('displayLastName');
     const emailInfoDisplay = document.getElementById('displayEmail');
@@ -39,7 +33,6 @@
     if (lastNameDisplay) lastNameDisplay.textContent = profile.lastname || 'User';
     if (emailInfoDisplay) emailInfoDisplay.textContent = profile.email || 'demo@example.com';
 
-    // Update profile photo
     updateProfilePhoto(profile.photo || '../img/user.jpg');
   }
 
@@ -47,7 +40,6 @@
   function updateProfilePhoto(photoUrl) {
     const finalPhotoUrl = photoUrl || '../img/user.jpg';
     
-    // Update large profile photo
     const profilePhotoDisplay = document.getElementById('profilePhotoDisplay');
     if (profilePhotoDisplay) {
       profilePhotoDisplay.src = finalPhotoUrl;
@@ -57,7 +49,6 @@
       };
     }
 
-    // Update all sidebar photos
     const sidebarPhotos = document.querySelectorAll('.user-photo');
     sidebarPhotos.forEach(photo => {
       photo.src = finalPhotoUrl;
@@ -70,11 +61,10 @@
 
   // Update statistics
   function updateStatistics() {
-    const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
-    const logs = Storage.load(CONFIG.STORAGE_KEYS.LOGS, []);
+    const machines = Storage._cache.machines;
+    const logs = Storage._cache.logs;
     const fixedLogs = logs.filter(l => l.status === CONFIG.LOG_STATUS.FIXED);
 
-    // Update stat displays
     const statMachines = document.getElementById('statMachines');
     const statLogs = document.getElementById('statLogs');
     const statFixed = document.getElementById('statFixed');
@@ -89,44 +79,37 @@
     const photoUpload = document.getElementById('photoUpload');
     if (!photoUpload) return;
 
-    photoUpload.addEventListener('change', (e) => {
+    photoUpload.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         UI.showAlert('Please select an image file', 'error');
         return;
       }
 
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         UI.showAlert('Image size must be less than 5MB', 'error');
         return;
       }
 
-      // Read file as base64
       const reader = new FileReader();
       
-      reader.onload = function(event) {
+      reader.onload = async function(event) {
         const base64Image = event.target.result;
         
-        // Get existing profile
-        const profile = Storage.load(CONFIG.STORAGE_KEYS.PROFILE, {});
-        
-        // Update photo
-        profile.photo = base64Image;
-        
-        // Save profile
-        Storage.save(CONFIG.STORAGE_KEYS.PROFILE, profile);
+        // Update in Firestore
+        const result = await FirestoreDB.updateUserProfile({
+          photo: base64Image
+        });
 
-        // Update display immediately
-        updateProfilePhoto(base64Image);
-        
-        // Force update sidebar
-        UI.updateSidebar();
-
-        UI.showAlert('Profile photo updated successfully!', 'success');
+        if (result.success) {
+          updateProfilePhoto(base64Image);
+          UI.updateSidebar();
+          UI.showAlert('Profile photo updated successfully!', 'success');
+        } else {
+          UI.showAlert('Failed to update photo: ' + result.error, 'error');
+        }
       };
 
       reader.onerror = function() {
@@ -142,9 +125,8 @@
     const editArea = document.getElementById('editArea');
     if (!editArea) return;
 
-    const profile = Storage.load(CONFIG.STORAGE_KEYS.PROFILE, {});
+    const profile = Storage._cache.profile;
 
-    // Populate form
     const firstnameInput = document.getElementById('p-firstname');
     const lastnameInput = document.getElementById('p-lastname');
     const emailInput = document.getElementById('p-email');
@@ -153,10 +135,8 @@
     if (lastnameInput) lastnameInput.value = profile.lastname || '';
     if (emailInput) emailInput.value = profile.email || '';
 
-    // Show edit area with smooth transition
     editArea.style.display = 'block';
 
-    // Scroll to form
     setTimeout(() => {
       editArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
@@ -186,15 +166,13 @@
     const form = document.getElementById('profileForm');
     if (!form) return;
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      // Get form values
       const firstname = document.getElementById('p-firstname').value.trim();
       const lastname = document.getElementById('p-lastname').value.trim();
       const email = document.getElementById('p-email').value.trim();
 
-      // Validate
       if (!firstname || !lastname) {
         UI.showAlert('First name and last name are required', 'error');
         return;
@@ -205,27 +183,24 @@
         return;
       }
 
-      // Get existing profile to preserve photo
-      const existingProfile = Storage.load(CONFIG.STORAGE_KEYS.PROFILE, {});
-
-      // Build updated profile
       const updatedProfile = {
         firstname: firstname,
         lastname: lastname,
         name: `${firstname} ${lastname}`,
-        email: email,
-        photo: existingProfile.photo || '../img/user.jpg'
+        email: email
       };
 
-      // Save profile
-      Storage.save(CONFIG.STORAGE_KEYS.PROFILE, updatedProfile);
+      // Update in Firestore
+      const result = await FirestoreDB.updateUserProfile(updatedProfile);
 
-      // Update displays
-      loadProfile();
-      UI.updateSidebar();
-      hideEditForm();
-
-      UI.showAlert('Profile updated successfully!', 'success');
+      if (result.success) {
+        await loadProfile();
+        UI.updateSidebar();
+        hideEditForm();
+        UI.showAlert('Profile updated successfully!', 'success');
+      } else {
+        UI.showAlert('Failed to update profile: ' + result.error, 'error');
+      }
     });
   }
 
@@ -245,7 +220,7 @@
     const deleteBtn = document.getElementById('deleteAccountBtn');
     if (!deleteBtn) return;
 
-    deleteBtn.addEventListener('click', () => {
+    deleteBtn.addEventListener('click', async () => {
       const confirmation = prompt('Type "DELETE" to confirm account deletion:');
       
       if (confirmation !== 'DELETE') {
@@ -253,8 +228,9 @@
         return;
       }
 
-      // Clear all data
-      Storage.clear();
+      // In real implementation, you'd delete user data from Firestore
+      // For now, just logout and clear local cache
+      await Auth.logout();
       UI.showAlert('Account deleted. Redirecting...', 'success');
       
       setTimeout(() => {
@@ -263,10 +239,24 @@
     });
   }
 
+  // Setup real-time listeners for statistics
+  function setupRealtimeListeners() {
+    FirestoreDB.listenToMachines((machines) => {
+      Storage._cache.machines = machines;
+      updateStatistics();
+    });
+
+    FirestoreDB.listenToLogs((logs) => {
+      Storage._cache.logs = logs;
+      updateStatistics();
+    });
+  }
+
   // Initialize page
   function init() {
     UI.updateSidebar();
     loadProfile();
+    setupRealtimeListeners();
     setupPhotoUpload();
     setupEditButton();
     setupProfileForm();
@@ -274,10 +264,24 @@
     setupDeleteAccount();
   }
 
+  function startApp() {
+    Auth.initAuthListener((user) => {
+      if (user) {
+        console.log("User found");
+        // User is logged in, NOW we can initialize the page.
+        init(); 
+      } else {
+        // No user, redirect to login.
+        console.log("No user found, redirecting to login...");
+        window.location.href = 'login-registration.html';
+      }
+    });
+  }
+
   // Run when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', startApp);
   } else {
-    init();
+    startApp();
   }
 })();

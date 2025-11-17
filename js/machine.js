@@ -1,10 +1,12 @@
-/* machine.js - Machine Details Page */
+/* machine.js - Machine Details Page (FIRESTORE) */
 
 (() => {
   let currentMachineId = null;
+  let unsubscribeMachine = null;
+  let unsubscribeLogs = null;
 
   // Load and display machine details
-  function loadMachineDetails() {
+  async function loadMachineDetails() {
     currentMachineId = Storage.load(CONFIG.STORAGE_KEYS.SELECTED_MACHINE, null);
     
     if (!currentMachineId) {
@@ -13,7 +15,8 @@
       return;
     }
 
-    const machine = MachineStatus.getById(currentMachineId);
+    // Get machine from Firestore
+    const machine = await FirestoreDB.getMachine(currentMachineId);
     
     if (!machine) {
       UI.showAlert('Machine not found. Redirecting to dashboard...', 'error');
@@ -21,10 +24,28 @@
       return;
     }
 
+    // Store in cache
+    const machineIndex = Storage._cache.machines.findIndex(m => m.id === currentMachineId);
+    if (machineIndex === -1) {
+      Storage._cache.machines.push(machine);
+    } else {
+      Storage._cache.machines[machineIndex] = machine;
+    }
+
     displayMachine(machine);
     setupEditForm(machine);
-    
-    // Refresh lights every 3 seconds
+    setupRealtimeUpdates();
+  }
+
+  // Setup real-time updates for lights
+  function setupRealtimeUpdates() {
+    // Listen to logs for this machine (for light status)
+    unsubscribeLogs = FirestoreDB.listenToLogs((logs) => {
+      Storage._cache.logs = logs;
+      updateStatusLights();
+    });
+
+    // Update lights every 3 seconds as backup
     setInterval(() => {
       updateStatusLights();
     }, 3000);
@@ -128,7 +149,7 @@
     const editForm = document.getElementById('editForm');
     if (!editForm) return;
 
-    editForm.addEventListener('submit', (e) => {
+    editForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       // Get form values
@@ -159,31 +180,19 @@
         }
       }
 
-      // Update machine
-      const machines = Storage.load(CONFIG.STORAGE_KEYS.MACHINES, []);
-      const machineIndex = machines.findIndex(m => m.id === currentMachineId);
+      // Update in Firestore
+      const result = await FirestoreDB.updateMachine(currentMachineId, formData);
 
-      if (machineIndex !== -1) {
-        // Keep existing values and update changed ones
-        machines[machineIndex] = {
-          ...machines[machineIndex],
-          name: formData.name,
-          img: formData.img,
-          minTemp: formData.minTemp,
-          maxTemp: formData.maxTemp,
-          minVib: formData.minVib,
-          maxVib: formData.maxVib,
-          notes: formData.notes,
-          updatedAt: Utils.nowISO()
-        };
-
-        Storage.save(CONFIG.STORAGE_KEYS.MACHINES, machines);
+      if (result.success) {
+        // Reload machine data
+        const updatedMachine = await FirestoreDB.getMachine(currentMachineId);
+        if (updatedMachine) {
+          displayMachine(updatedMachine);
+        }
         
-        // Reload display
-        displayMachine(machines[machineIndex]);
         UI.showAlert('Machine updated successfully!', 'success');
       } else {
-        UI.showAlert('Machine not found', 'error');
+        UI.showAlert('Failed to update machine: ' + result.error, 'error');
       }
     });
   }
@@ -194,10 +203,30 @@
     loadMachineDetails();
   }
 
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (unsubscribeMachine) unsubscribeMachine();
+    if (unsubscribeLogs) unsubscribeLogs();
+  });
+
+  function startApp() {
+    Auth.initAuthListener((user) => {
+      if (user) {
+        console.log("User found");
+        // User is logged in, NOW we can initialize the page.
+        init(); 
+      } else {
+        // No user, redirect to login.
+        console.log("No user found, redirecting to login...");
+        window.location.href = 'login-registration.html';
+      }
+    });
+  }
+
   // Run when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', startApp);
   } else {
-    init();
+    startApp();
   }
 })();

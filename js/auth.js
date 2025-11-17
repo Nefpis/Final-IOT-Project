@@ -96,28 +96,47 @@ const Auth = {
         return { success: false, error: 'Name must be at least 2 characters' };
       }
 
+      console.log('🔄 Starting registration for:', email);
+
       // Create user with Firebase
       const userCredential = await Firebase.auth.createUserWithEmailAndPassword(email, password);
       const user = userCredential.user;
 
-      // Update display name
-      await user.updateProfile({
-        displayName: name
-      });
+      console.log('✅ Firebase user created:', user.uid);
 
-      console.log('✅ Registration successful:', user.email);
+      // Update display name
+      try {
+        await user.updateProfile({
+          displayName: name
+        });
+        console.log('✅ Display name updated');
+      } catch (profileError) {
+        console.warn('⚠️ Could not update display name:', profileError);
+      }
 
       // Create user profile in Firestore
-      await Firebase.db.collection('users').doc(user.uid).set({
-        email: email,
-        name: name,
-        firstname: name.split(' ')[0] || 'User',
-        lastname: name.split(' ').slice(1).join(' ') || '',
-        photo: '../img/user.png',
-        createdAt: Firebase.timestamp()
-      });
+      try {
+        const profileData = {
+          email: email,
+          name: name,
+          firstname: name.split(' ')[0] || 'User',
+          lastname: name.split(' ').slice(1).join(' ') || '',
+          photo: '../img/user.jpg',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
 
-      console.log('✅ User profile created in Firestore');
+        console.log('🔄 Creating Firestore profile:', profileData);
+
+        await Firebase.db.collection('users').doc(user.uid).set(profileData);
+
+        console.log('✅ User profile created in Firestore!');
+        console.log('📊 Check Firebase Console → Firestore Database → users collection');
+
+      } catch (firestoreError) {
+        console.error('❌ Firestore profile creation failed:', firestoreError);
+        console.error('Error details:', firestoreError.code, firestoreError.message);
+        // Don't fail registration if profile creation fails
+      }
 
       return { 
         success: true, 
@@ -130,6 +149,8 @@ const Auth = {
 
     } catch (error) {
       console.error('❌ Registration error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
       
       // Handle Firebase auth errors
       let errorMessage = 'Registration failed';

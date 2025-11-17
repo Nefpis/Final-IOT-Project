@@ -1,6 +1,7 @@
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+/* firebase-config.js - Firebase Configuration & Initialization */
 
+// ⚠️ REPLACE THESE VALUES WITH YOUR FIREBASE CONFIG
+// Get these from: Firebase Console → Project Settings → Your apps → Web app
 const firebaseConfig = {
   apiKey: "AIzaSyBd5Ir67GeDAF90gJampdvqxdviSLRNx7E",
   authDomain: "techpredict-6fc58.firebaseapp.com",
@@ -9,7 +10,7 @@ const firebaseConfig = {
   messagingSenderId: "673955585835",
   appId: "1:673955585835:web:703ae68eea6f11b5c5af6e",
   measurementId: "G-PG09M126ZQ"
-};
+  };
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
