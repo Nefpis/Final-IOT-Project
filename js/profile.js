@@ -261,12 +261,6 @@
 
   // Initialize page
   function init() {
-    // Check authentication
-    if (!Auth.isAuthenticated()) {
-      window.location.href = 'login-registration.html';
-      return;
-    }
-
     UI.updateSidebar();
     loadProfile();
     setupRealtimeListeners();
@@ -277,10 +271,24 @@
     setupDeleteAccount();
   }
 
+  function startApp() {
+    Auth.initAuthListener((user) => {
+      if (user) {
+        console.log("User found");
+        // User is logged in, NOW we can initialize the page.
+        init(); 
+      } else {
+        // No user, redirect to login.
+        console.log("No user found, redirecting to login...");
+        window.location.href = 'login-registration.html';
+      }
+    });
+  }
+
   // Run when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded',startApp);
   } else {
-    init();
+    startApp();
   }
 })();
