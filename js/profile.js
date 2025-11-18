@@ -104,6 +104,13 @@
         });
 
         if (result.success) {
+          // Update cache immediately
+          const profile = Storage._cache.profile;
+          if (profile) {
+            profile.photo = base64Image;
+            ProfileCache.save(profile);
+          }
+          
           updateProfilePhoto(base64Image);
           UI.updateSidebar();
           UI.showAlert('Profile photo updated successfully!', 'success');
@@ -254,6 +261,12 @@
 
   // Initialize page
   function init() {
+    // Check authentication
+    if (!Auth.isAuthenticated()) {
+      window.location.href = 'login-registration.html';
+      return;
+    }
+
     UI.updateSidebar();
     loadProfile();
     setupRealtimeListeners();
@@ -264,24 +277,10 @@
     setupDeleteAccount();
   }
 
-  function startApp() {
-    Auth.initAuthListener((user) => {
-      if (user) {
-        console.log("User found");
-        // User is logged in, NOW we can initialize the page.
-        init(); 
-      } else {
-        // No user, redirect to login.
-        console.log("No user found, redirecting to login...");
-        window.location.href = 'login-registration.html';
-      }
-    });
-  }
-
   // Run when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startApp);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    startApp();
+    init();
   }
 })();

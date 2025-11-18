@@ -1,4 +1,4 @@
-/* auth.js - Firebase Authentication */
+/* auth.js - Firebase Authentication (SUPER FIXED VERSION) */
 
 const Auth = {
   // Current user (Firebase manages this)
@@ -23,9 +23,11 @@ const Auth = {
     };
   },
 
-  // Login with Firebase
+  // Login with Firebase - IMPROVED
   login: async (email, password) => {
     try {
+      console.log('🔄 Attempting login for:', email);
+
       // Validate input
       if (!Validator.isValidEmail(email)) {
         return { success: false, error: 'Invalid email format' };
@@ -40,6 +42,33 @@ const Auth = {
       const user = userCredential.user;
 
       console.log('✅ Login successful:', user.email);
+      console.log('User ID:', user.uid);
+
+      // Check if user profile exists in Firestore
+      try {
+        const profileDoc = await Firebase.db.collection('users').doc(user.uid).get();
+        
+        if (!profileDoc.exists) {
+          console.warn('⚠️ User profile not found in Firestore, creating one...');
+          
+          // Create missing profile
+          await Firebase.db.collection('users').doc(user.uid).set({
+            email: user.email,
+            name: user.displayName || user.email.split('@')[0],
+            firstname: user.displayName?.split(' ')[0] || 'User',
+            lastname: user.displayName?.split(' ').slice(1).join(' ') || '',
+            photo: '../img/user.jpg',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          
+          console.log('✅ Created missing profile');
+        } else {
+          console.log('✅ User profile found in Firestore');
+        }
+      } catch (profileError) {
+        console.error('⚠️ Could not check/create profile:', profileError);
+        // Continue anyway - not critical for login
+      }
 
       return { 
         success: true, 
@@ -52,13 +81,15 @@ const Auth = {
 
     } catch (error) {
       console.error('❌ Login error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
       
       // Handle Firebase auth errors
       let errorMessage = 'Login failed';
       
       switch (error.code) {
         case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
+          errorMessage = 'No account found with this email. Please register first.';
           break;
         case 'auth/wrong-password':
           errorMessage = 'Incorrect password';
@@ -72,6 +103,9 @@ const Auth = {
         case 'auth/too-many-requests':
           errorMessage = 'Too many failed attempts. Please try again later';
           break;
+        case 'auth/invalid-credential':
+          errorMessage = 'Invalid email or password';
+          break;
         default:
           errorMessage = error.message;
       }
@@ -80,9 +114,12 @@ const Auth = {
     }
   },
 
-  // Register with Firebase
+  // Register with Firebase - SUPER FIXED VERSION
   register: async (email, password, name) => {
     try {
+      console.log('🔄 Starting registration for:', email);
+      console.log('Name:', name);
+
       // Validate input
       if (!Validator.isValidEmail(email)) {
         return { success: false, error: 'Invalid email format' };
@@ -96,47 +133,98 @@ const Auth = {
         return { success: false, error: 'Name must be at least 2 characters' };
       }
 
-      console.log('🔄 Starting registration for:', email);
+      // Step 1: Check if user already exists
+      try {
+        const methods = await Firebase.auth.fetchSignInMethodsForEmail(email);
+        if (methods.length > 0) {
+          console.warn('⚠️ User already exists with this email');
+          return { success: false, error: 'An account with this email already exists. Please login instead.' };
+        }
+      } catch (checkError) {
+        console.log('Could not check existing user, continuing...');
+      }
 
-      // Create user with Firebase
+      // Step 2: Create user with Firebase Auth
+      console.log('🔄 Creating Firebase Auth user...');
       const userCredential = await Firebase.auth.createUserWithEmailAndPassword(email, password);
       const user = userCredential.user;
 
-      console.log('✅ Firebase user created:', user.uid);
+      console.log('✅ User created in Firebase Auth');
+      console.log('User ID:', user.uid);
+      console.log('User email:', user.email);
 
-      // Update display name
+      // Step 3: Update display name
       try {
-        await user.updateProfile({
+        console.log('YAHOO');
+         user.updateProfile({
           displayName: name
         });
-        console.log('✅ Display name updated');
+        console.log('✅ Display name updated to:', name);
       } catch (profileError) {
-        console.warn('⚠️ Could not update display name:', profileError);
+        console.warn('⚠️ Could not update display name:', profileError.message);
+        // Continue anyway
       }
 
-      // Create user profile in Firestore
+      // Step 4: Create user profile in Firestore
+      console.log('🔄 Creating Firestore profile document...');
+      
+      const nameParts = name.trim().split(' ');
+      const firstname = nameParts[0] || 'User';
+      const lastname = nameParts.slice(1).join(' ') || '';
+
+      const profileData = {
+        email: email,
+        name: name,
+        firstname: firstname,
+        lastname: lastname,
+        photo: '../img/user.jpg',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      console.log('Profile data:', profileData);
+      console.log('Writing to path: users/' + user.uid);
+
       try {
-        const profileData = {
-          email: email,
-          name: name,
-          firstname: name.split(' ')[0] || 'User',
-          lastname: name.split(' ').slice(1).join(' ') || '',
-          photo: '../img/user.jpg',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        console.log('🔄 Creating Firestore profile:', profileData);
-
+        // Try to write to Firestore
         await Firebase.db.collection('users').doc(user.uid).set(profileData);
+        console.log('✅ Firestore write successful!');
 
-        console.log('✅ User profile created in Firestore!');
-        console.log('📊 Check Firebase Console → Firestore Database → users collection');
+        // Verify it was created
+        const verifyDoc = await Firebase.db.collection('users').doc(user.uid).get();
+        if (verifyDoc.exists) {
+          console.log('✅ Profile document verified!');
+          console.log('Document data:', verifyDoc.data());
+        } else {
+          console.error('❌ Profile document not found after creation!');
+        }
 
       } catch (firestoreError) {
-        console.error('❌ Firestore profile creation failed:', firestoreError);
-        console.error('Error details:', firestoreError.code, firestoreError.message);
-        // Don't fail registration if profile creation fails
+        console.error('❌ Firestore error:', firestoreError);
+        console.error('Error code:', firestoreError.code);
+        console.error('Error message:', firestoreError.message);
+        
+        if (firestoreError.code === 'permission-denied') {
+          alert(`
+⚠️ FIRESTORE PERMISSION DENIED!
+
+Your Firestore security rules are blocking profile creation.
+
+FIX:
+1. Go to Firebase Console
+2. Click "Firestore Database"
+3. Click "Rules" tab
+4. Make sure rules allow authenticated users to write
+
+Your account was created in Firebase Auth but profile creation failed.
+You can still login, and the profile will be created automatically.
+          `);
+        }
+        
+        // Don't fail registration - profile will be created on login
+        console.log('⚠️ Continuing despite Firestore error...');
       }
+
+      console.log('✅ Registration process completed!');
 
       return { 
         success: true, 
@@ -157,13 +245,16 @@ const Auth = {
       
       switch (error.code) {
         case 'auth/email-already-in-use':
-          errorMessage = 'An account with this email already exists';
+          errorMessage = 'An account with this email already exists. Please login instead.';
           break;
         case 'auth/invalid-email':
           errorMessage = 'Invalid email address';
           break;
         case 'auth/weak-password':
           errorMessage = 'Password is too weak. Use at least 6 characters';
+          break;
+        case 'auth/operation-not-allowed':
+          errorMessage = 'Email/password authentication is not enabled. Check Firebase Console.';
           break;
         default:
           errorMessage = error.message;

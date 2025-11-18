@@ -1,33 +1,25 @@
-/* common.js - Shared Utilities (NOW USING FIRESTORE) */
+/* common.js - Shared Utilities (WITH SMART PROFILE CACHE) */
 
 // Utility functions
 const Utils = {
-  // Generate unique ID (NOT NEEDED - Firestore auto-generates)
   uid: (prefix = 'id') => {
     return prefix + Math.random().toString(36).slice(2, 9);
   },
 
-  // Get current ISO timestamp
   nowISO: () => {
     return new Date().toISOString();
   },
 
-  // Format date for display
   formatDate: (isoString) => {
     if (!isoString) return 'N/A';
-    
-    // Handle Firestore Timestamp
     if (isoString.toDate) {
       return isoString.toDate().toLocaleString();
     }
-    
     return new Date(isoString).toLocaleString();
   },
 
-  // Extract image URL from Google Images link
   extractImageUrl: (url) => {
     if (!url) return null;
-    
     if (url.includes('google.com/imgres')) {
       const match = url.match(/imgurl=([^&]+)/);
       if (match) {
@@ -37,27 +29,22 @@ const Utils = {
     return url;
   },
 
-  // Validate and format image URL
   formatImageUrl: (imgValue) => {
     if (!imgValue) {
       return '../img/machine-placeholder.png';
     }
-    
     imgValue = Utils.extractImageUrl(imgValue);
-    
     if (imgValue.startsWith('http')) {
       return imgValue;
     }
-    
     if (!imgValue.startsWith('../img/')) {
       return '../img/' + imgValue;
     }
-    
     return imgValue;
   }
 };
 
-// Validator object (unchanged)
+// Validator object
 const Validator = {
   isValidEmail: (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -188,11 +175,47 @@ const Validator = {
   }
 };
 
-// Storage Manager - NOW USES FIRESTORE!
-const Storage = {
-  // These are WRAPPERS for backward compatibility
-  // Real data comes from Firestore
+// Profile Cache Manager - NEW!
+const ProfileCache = {
+  KEY: 'cached_user_profile',
   
+  // Save profile to localStorage for instant access
+  save: (profile) => {
+    try {
+      localStorage.setItem(ProfileCache.KEY, JSON.stringify(profile));
+      console.log('✅ Profile cached to localStorage');
+    } catch (error) {
+      console.error('❌ Failed to cache profile:', error);
+    }
+  },
+  
+  // Load profile from localStorage (instant!)
+  load: () => {
+    try {
+      const cached = localStorage.getItem(ProfileCache.KEY);
+      if (cached) {
+        console.log('✅ Profile loaded from cache (instant)');
+        return JSON.parse(cached);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load cached profile:', error);
+    }
+    return null;
+  },
+  
+  // Clear cache (on logout)
+  clear: () => {
+    try {
+      localStorage.removeItem(ProfileCache.KEY);
+      console.log('✅ Profile cache cleared');
+    } catch (error) {
+      console.error('❌ Failed to clear profile cache:', error);
+    }
+  }
+};
+
+// Storage Manager
+const Storage = {
   _cache: {
     machines: [],
     logs: [],
@@ -201,11 +224,7 @@ const Storage = {
     profile: null
   },
 
-  // Load data (from cache or Firestore)
   load: (key, defaultValue = []) => {
-    // For backward compatibility with old code
-    // Return cached data (updated by listeners)
-    
     if (key === CONFIG.STORAGE_KEYS.MACHINES) {
       return Storage._cache.machines;
     }
@@ -222,7 +241,6 @@ const Storage = {
       return Storage._cache.profile || defaultValue;
     }
     
-    // Fallback to localStorage for other keys
     try {
       const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : defaultValue;
@@ -232,10 +250,7 @@ const Storage = {
     }
   },
 
-  // Save is handled by Firestore operations now
   save: (key, value) => {
-    console.warn('Storage.save() called - should use FirestoreDB methods instead');
-    // Keep for temporary data like selectedMachine
     try {
       localStorage.setItem(key, JSON.stringify(value));
       return true;
@@ -257,7 +272,9 @@ const Storage = {
 
   clear: () => {
     try {
+      // Clear everything including profile cache
       localStorage.clear();
+      ProfileCache.clear();
       return true;
     } catch (error) {
       console.error('Storage clear error:', error);
@@ -290,20 +307,50 @@ const UI = {
     return window.confirm(message);
   },
 
-  // Update sidebar - NOW USES FIRESTORE
+  // Update sidebar - WITH INSTANT CACHE LOADING
   updateSidebar: async () => {
-    UI.setupLogoutButton();
     const userId = Firebase.getCurrentUserId();
     if (!userId) return;
 
-    // Get profile from Firestore
-    const profile = await FirestoreDB.getUserProfile();
+    // STEP 1: Load from cache FIRST (instant display!)
+    let profile = ProfileCache.load();
     
-    if (!profile) {
-      console.warn('No profile found');
-      return;
+    if (profile) {
+      // Display cached profile immediately (no "Loading...")
+      UI._displayProfile(profile);
+    } else {
+      // Show loading only if no cache exists
+      const nameElements = document.querySelectorAll('#sbName, #sbN, #sbN2');
+      nameElements.forEach(el => {
+        if (el) el.textContent = 'Loading...';
+      });
     }
 
+    // STEP 2: Load from Firestore in background and update cache
+    try {
+      const freshProfile = await FirestoreDB.getUserProfile();
+      
+      if (freshProfile) {
+        // Update cache with fresh data
+        ProfileCache.save(freshProfile);
+        Storage._cache.profile = freshProfile;
+        
+        // Update display with fresh data
+        UI._displayProfile(freshProfile);
+      }
+    } catch (error) {
+      console.error('Failed to load profile from Firestore:', error);
+      // If cache exists, continue using it
+      if (!profile) {
+        console.error('No cached profile available');
+      }
+    }
+
+    UI.setupLogoutButton();
+  },
+
+  // Internal helper to display profile
+  _displayProfile: (profile) => {
     const fullName = profile.name || `${profile.firstname || 'Demo'} ${profile.lastname || 'User'}`;
 
     const nameElements = document.querySelectorAll('#sbName, #sbN, #sbN2');
@@ -316,7 +363,6 @@ const UI = {
       if (el) el.textContent = profile.email;
     });
 
-    // Get machine count from cache
     const machines = Storage._cache.machines;
     const countElements = document.querySelectorAll('#sbCount, #profileMachines, #countMd');
     countElements.forEach(el => {
@@ -336,8 +382,6 @@ const UI = {
         };
       }
     });
-
-    
   },
 
   setupLogoutButton: () => {
@@ -350,10 +394,16 @@ const UI = {
       const result = await Auth.logout();
       
       if (result.success) {
-        UI.showAlert('Logged out successfully', 'success');
-        setTimeout(() => {
-          window.location.href = 'login-registration.html';
-        }, 500);
+        // Clear ALL caches
+        Storage._cache.machines = [];
+        Storage._cache.logs = [];
+        Storage._cache.reports = [];
+        Storage._cache.problems = [];
+        Storage._cache.profile = null;
+        ProfileCache.clear();
+        
+        // Force redirect
+        window.location.replace('login-registration.html');
       } else {
         UI.showAlert('Logout failed', 'error');
       }
@@ -374,7 +424,7 @@ const UI = {
   }
 };
 
-// Machine Status Manager - NOW USES FIRESTORE
+// Machine Status Manager
 const MachineStatus = {
   syncFromLogs: (machineId) => {
     const logs = Storage._cache.logs.filter(l => l.machineId === machineId);
@@ -394,7 +444,6 @@ const MachineStatus = {
       newStatus = CONFIG.STATUS.YELLOW;
     }
     
-    // Update in Firestore
     FirestoreDB.updateMachine(machineId, { status: newStatus });
   },
 
