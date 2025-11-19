@@ -225,25 +225,118 @@
   // Delete account
   function setupDeleteAccount() {
     const deleteBtn = document.getElementById('deleteAccountBtn');
-    if (!deleteBtn) return;
+  if (!deleteBtn) return;
 
-    deleteBtn.addEventListener('click', async () => {
-      const confirmation = prompt('Type "DELETE" to confirm account deletion:');
-      
-      if (confirmation !== 'DELETE') {
-        UI.showAlert('Account deletion cancelled', 'info');
+  deleteBtn.addEventListener('click', async () => {
+    // Step 1: Confirm deletion
+    const confirmation = prompt('⚠️ This cannot be undone!\n\nType "DELETE MY ACCOUNT" to confirm:');
+    
+    if (confirmation !== 'DELETE MY ACCOUNT') {
+      UI.showAlert('Account deletion cancelled', 'info');
+      return;
+    }
+
+    // Step 2: Show loading
+    UI.showAlert('⏳ Deleting account and all data... This may take a moment...', 'info');
+
+    try {
+      const userId = Firebase.getCurrentUserId();
+      if (!userId) {
+        UI.showAlert('❌ Not logged in', 'error');
         return;
       }
 
-      // In real implementation, you'd delete user data from Firestore
-      // For now, just logout and clear local cache
-      await Auth.logout();
-      UI.showAlert('Account deleted. Redirecting...', 'success');
+      console.log('🔄 Starting account deletion for:', userId);
+
+      // Step 3: Delete all user data from Firestore
+      console.log('🔄 Deleting Firestore data...');
+
+      // Delete all machines for this user
+      const machinesSnapshot = await Firebase.db
+        .collection('machines')
+        .where('userId', '==', userId)
+        .get();
+      
+      for (const doc of machinesSnapshot.docs) {
+        await doc.ref.delete();
+        console.log('✅ Deleted machine:', doc.id);
+      }
+
+      // Delete all logs for this user
+      const logsSnapshot = await Firebase.db
+        .collection('logs')
+        .where('userId', '==', userId)
+        .get();
+      
+      for (const doc of logsSnapshot.docs) {
+        await doc.ref.delete();
+        console.log('✅ Deleted log:', doc.id);
+      }
+
+      // Delete all reports for this user
+      const reportsSnapshot = await Firebase.db
+        .collection('reports')
+        .where('userId', '==', userId)
+        .get();
+      
+      for (const doc of reportsSnapshot.docs) {
+        await doc.ref.delete();
+        console.log('✅ Deleted report:', doc.id);
+      }
+
+      // Delete problems created by this user
+      const problemsSnapshot = await Firebase.db
+        .collection('problems')
+        .where('createdByUserId', '==', userId)
+        .get();
+      
+      for (const doc of problemsSnapshot.docs) {
+        await doc.ref.delete();
+        console.log('✅ Deleted problem:', doc.id);
+      }
+
+      // Delete user profile
+      await Firebase.db.collection('users').doc(userId).delete();
+      console.log('✅ Deleted user profile');
+
+      // Step 4: Delete Firebase Auth account
+      console.log('🔄 Deleting Firebase Auth account...');
+      const user = Firebase.auth.currentUser;
+      
+      if (user) {
+        await user.delete();
+        console.log('✅ Deleted Firebase Auth user');
+      }
+
+      // Step 5: Clear local storage
+      Storage.clear();
+      console.log('✅ Cleared local storage');
+
+      // Step 6: Success and redirect
+      console.log('✅ Account completely deleted!');
+      UI.showAlert('✅ Account deleted successfully. Redirecting...', 'success');
       
       setTimeout(() => {
         window.location.href = 'login-registration.html';
       }, 2000);
-    });
+
+    } catch (error) {
+      console.error('❌ Account deletion error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+
+      // Handle specific errors
+      let errorMessage = 'Failed to delete account';
+
+      if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please logout and login again, then try deleting your account';
+      } else if (error.code === 'permission-denied') {
+        errorMessage = 'Permission denied. Check your Firestore rules';
+      }
+
+      UI.showAlert('❌ ' + errorMessage + ': ' + error.message, 'error');
+    }
+  });
   }
 
   // Setup real-time listeners for statistics
