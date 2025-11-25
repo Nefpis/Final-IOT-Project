@@ -320,6 +320,51 @@ const FirestoreDB = {
         return { success: false, error: error.message };
       }
     },
+
+   // [UPDATED] Set the global machine ID for the Factory WiFi
+  // [UPDATED] Set the global machine ID and NAME
+  setEspTarget: async (machineId) => {
+    try {
+      const userId = Firebase.getCurrentUserId();
+      const user = Auth.getCurrentUser();
+      
+      if (!userId) throw new Error('User not authenticated');
+
+      // --- NEW STEP: Get the Machine Name ---
+      let machineName = 'Unknown Machine';
+      
+      if (machineId) {
+        // We look up the machine in the 'machines' collection to get its real name
+        const machineDoc = await Firebase.db.collection('machines').doc(machineId).get();
+        if (machineDoc.exists) {
+          machineName = machineDoc.data().name; 
+        }
+      }
+      // --------------------------------------
+
+      // 1. Update User Profile
+      await Firebase.db.collection('users').doc(userId).update({
+        activeEspMachineId: machineId,
+        updatedAt: Firebase.timestamp()
+      });
+
+      // 2. Update GLOBAL Settings with the NAME
+      await Firebase.db.collection('esp32_settings').doc('wifi_factory').set({
+        machineId: machineId,
+        machineName: machineName, // <--- This creates the missing field!
+        currentUserId: userId,
+        timestamp: Firebase.timestamp(),
+        lastUpdatedBy: user.email,
+        lastUpdatedByName: user.displayName || 'Manager'
+      }, { merge: true });
+
+      console.log('✅ ESP Target Set:', machineName);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error updating ESP target:', error);
+      return { success: false, error: error.message };
+    }
+  },
   
     // ==================== REAL-TIME LISTENERS ====================
   

@@ -160,20 +160,179 @@
   }
 
   // Setup real-time listeners
-  function setupRealtimeListeners() {
-    // Listen to machines
-    unsubscribeMachines = FirestoreDB.listenToMachines((machines) => {
-      Storage._cache.machines = machines;
-      renderMachines();
-      UI.updateSidebar();
-    });
+  // 3. Update the Main Listener Function
+function setupRealtimeListeners() {
+  // A. Listen to Machines (Populate Options)
+  unsubscribeMachines = FirestoreDB.listenToMachines(async (machines) => {
+    Storage._cache.machines = machines;
+    renderMachines();
+    UI.updateSidebar();
+    
+    // Update dropdown options
+    renderEspDropdownOptions(machines); 
+  });
 
-    // Listen to logs (needed for light status)
-    unsubscribeLogs = FirestoreDB.listenToLogs((logs) => {
-      Storage._cache.logs = logs;
-      renderMachines(); // Re-render to update lights
+  // B. Listen to Global Settings (Update Selection)
+  // This makes the dropdown move automatically when another manager changes it!
+  setupEspSettingsListener();
+
+  // C. Listen to logs
+  unsubscribeLogs = FirestoreDB.listenToLogs((logs) => {
+    Storage._cache.logs = logs;
+    renderMachines();
+  });
+}
+
+  // Global variable to store the current target from Firestore
+let globalEspTarget = null; 
+
+// 1. Render the Dropdown Options (Called when machines load)
+function renderEspDropdownOptions(machines) {
+    const selectors = document.querySelectorAll('.esp-target-selector');
+    if (selectors.length === 0) return;
+
+    selectors.forEach(selector => {
+        // Save current selection to restore it after rebuilding options
+        // (Priority: Global Setting > Current Value > First Machine)
+        const currentVal = globalEspTarget || selector.value;
+        
+        selector.innerHTML = ''; // Clear existing
+
+        if (machines.length === 0) {
+            selector.innerHTML = '<option value="">No Machines</option>';
+            return;
+        }
+
+        machines.forEach(machine => {
+            const option = document.createElement('option');
+            option.value = machine.id;
+            option.textContent = machine.name;
+            selector.appendChild(option);
+        });
+
+        // Set the value to the global target if we have one
+        if (globalEspTarget) {
+            selector.value = globalEspTarget;
+        } else if (machines.length > 0 && !selector.value) {
+            // Default to first if nothing selected
+            selector.value = machines[0].id; 
+        }
+
+        // Add Change Listener (Cloning to ensure clean events)
+        const newSelector = selector.cloneNode(true);
+        selector.parentNode.replaceChild(newSelector, selector);
+        
+        newSelector.addEventListener('change', async (e) => {
+            const selectedId = e.target.value;
+            // This now updates the GLOBAL setting
+            await FirestoreDB.setEspTarget(selectedId);
+        });
     });
+}
+
+// 2. New Listener for Global ESP Settings
+function setupEspSettingsListener() {
+    Firebase.db.collection('esp32_settings').doc('wifi_factory')
+        .onSnapshot((doc) => {
+            if (doc.exists) {
+                const settings = doc.data();
+                globalEspTarget = settings.machineId;
+                
+                console.log(`📡 Global ESP Target Changed: ${globalEspTarget} (Updated by: ${settings.lastUpdatedBy})`);
+
+                // Update ALL dropdowns on the page immediately
+                document.querySelectorAll('.esp-target-selector').forEach(s => {
+                    s.value = globalEspTarget;
+                });
+            } else {
+                console.log("⚠️ No global ESP settings found. Creating default...");
+                // If it doesn't exist yet, create it!
+                if (Storage._cache.machines.length > 0) {
+                     FirestoreDB.setEspTarget(Storage._cache.machines[0].id);
+                }
+            }
+        });
+}
+
+// [NEW SYSTEM] "The Security Guard"
+// This watches incoming reports and generates Logs/Alerts automatically
+function startSecurityGuard() {
+  console.log("🛡️ Security Guard Started: Monitoring sensors...");
+  // Listen to the latest report added to the system
+  Firebase.db.collection('reports')
+    .orderBy('timestamp', 'desc')
+    .limit(1)
+    .onSnapshot((snapshot) => {
+      if (snapshot.empty) return;
+      
+      const report = snapshot.docs[0].data();
+      const reportId = snapshot.docs[0].id; // Use ID to prevent duplicate logs
+      
+      // Only process reports that are new (less than 10 seconds old)
+      // This prevents generating logs for old data when you refresh the page
+      const reportTime = report.timestamp ? report.timestamp.toDate() : new Date();
+      const now = new Date();
+      const ageInSeconds = (now - reportTime) / 1000;
+      
+      if (ageInSeconds > 10) return;
+
+      analyzeReport(report, reportId);
+    });
+}
+
+async function analyzeReport(report, reportId) {
+  // 1. Find the machine limits
+  // We look in our cache to find the machine settings
+  const machine = Storage._cache.machines.find(m => m.id === report.machineId);
+  
+  if (!machine) return; // Unknown machine
+
+  // 2. Check for Violations
+  let faultProb = 0;
+  let message = "";
+  let status = "fixed"; // Default to healthy
+
+  // Check Temperature
+  if (report.temp > machine.maxTemp) {
+    faultProb += 40;
+    message += `High Temp (${report.temp}°C). `;
   }
+  
+  // Check Vibration
+  if (report.vib > machine.maxVib) {
+    faultProb += 40;
+    message += `High Vib (${report.vib}g). `;
+  }
+
+  // 3. If there is a problem, Create a Log!
+  if (faultProb > 0) {
+    // Determine severity
+    status = "not"; // "Not Fixed" (Red/Danger)
+    
+    // Check if we already created a log for this specific report 
+    // (To prevent loops)
+    const logCheck = await Firebase.db.collection('logs')
+                            .where('reportId', '==', reportId).get();
+                            
+    if (logCheck.empty) {
+        console.warn("⚠️ VIOLATION DETECTED:", message);
+        
+        await FirestoreDB.addLog({
+            machineId: machine.id,
+            message: message.trim(),
+            faultProbability: Math.min(faultProb, 99),
+            temperature: report.temp,
+            vibration: report.vib,
+            sound: report.sound,
+            status: CONFIG.LOG_STATUS.NOT_FIXED,
+            reportId: reportId // Link to source report
+        });
+        
+        // This will automatically trigger the "Lights" to turn RED
+        // because your website is already listening to the 'logs' collection!
+    }
+  }
+}
 
   async function init() {
     // Check authentication
@@ -198,7 +357,8 @@
       if (user) {
         console.log("User found");
         // User is logged in, NOW we can initialize the page.
-        init(); 
+        init();
+        startSecurityGuard(); 
       } else {
         // No user, redirect to login.
         console.log("No user found, redirecting to login...");
