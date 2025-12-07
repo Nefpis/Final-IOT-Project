@@ -458,13 +458,13 @@ const MachineStatus = {
 
 /* common.js - Global Security System */
 
-const SecuritySystem = {
+window.SecuritySystem = {
   isStarted: false,
 
   // Start listening to reports (called by auth.js)
   start: () => {
-    if (SecuritySystem.isStarted) return;
-    SecuritySystem.isStarted = true;
+    if (window.SecuritySystem.isStarted) return; // Use window reference
+    window.SecuritySystem.isStarted = true;
     console.log("🛡️ Global Smart Security Guard Started");
 
     Firebase.db.collection('reports')
@@ -474,7 +474,8 @@ const SecuritySystem = {
         if (snapshot.empty) return;
         const report = snapshot.docs[0].data();
         const reportId = snapshot.docs[0].id;
-        SecuritySystem.analyze(report, reportId);
+        // Ensure we call analyze on the window object
+        window.SecuritySystem.analyze(report, reportId);
       });
   },
 

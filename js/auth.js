@@ -337,9 +337,25 @@ You can still login, and the profile will be created automatically.
         console.log('🔐 User authenticated:', user.email);
         Auth.currentUser = user;
 
-        // [THIS IS THE TRIGGER]
-        // Starts the guard defined in common.js
-        if (window.SecuritySystem) window.SecuritySystem.start();
+        // [FIXED TRIGGER] 
+        // We define a helper function to start the system
+        const launchSecurity = () => {
+          if (window.SecuritySystem) {
+              window.SecuritySystem.start();
+          } else {
+              console.warn("⚠️ SecuritySystem missing even after load.");
+          }
+     };
+
+     // Check if the page is already fully loaded
+     if (document.readyState === "complete" || document.readyState === "interactive") {
+         // Page is ready, run immediately
+         launchSecurity();
+     } else {
+         // Page is still loading, wait for it to finish
+         console.log("⌛ Auth ready, waiting for common.js...");
+         window.addEventListener('DOMContentLoaded', launchSecurity);
+     }
 
         if (callback) callback(user);
       } else {
