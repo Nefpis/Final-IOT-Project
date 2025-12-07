@@ -256,9 +256,11 @@ function setupEspSettingsListener() {
 
 // [NEW SYSTEM] "The Security Guard"
 // This watches incoming reports and generates Logs/Alerts automatically
+// [UPDATED] Security Guard with Debugging
 function startSecurityGuard() {
-  console.log("🛡️ Security Guard Started: Monitoring sensors...");
-  // Listen to the latest report added to the system
+  console.log("🛡️ Security Guard Started: Waiting for reports...");
+
+  // Listen to the latest report
   Firebase.db.collection('reports')
     .orderBy('timestamp', 'desc')
     .limit(1)
@@ -266,56 +268,60 @@ function startSecurityGuard() {
       if (snapshot.empty) return;
       
       const report = snapshot.docs[0].data();
-      const reportId = snapshot.docs[0].id; // Use ID to prevent duplicate logs
+      const reportId = snapshot.docs[0].id;
       
-      // Only process reports that are new (less than 10 seconds old)
-      // This prevents generating logs for old data when you refresh the page
-      const reportTime = report.timestamp ? report.timestamp.toDate() : new Date();
-      const now = new Date();
-      const ageInSeconds = (now - reportTime) / 1000;
+      // Debugging: Print what we received
+      console.log("📨 New Report Received:", report);
+      console.log("   - Machine ID:", report.machineId);
+      console.log("   - Temp:", report.temp);
       
-      if (ageInSeconds > 10) return;
+      // --- REMOVED AGE CHECK ---
+      // We now accept ALL reports to ensure the logs appear during your demo.
+      // -------------------------
 
       analyzeReport(report, reportId);
     });
 }
 
 async function analyzeReport(report, reportId) {
-  // 1. Find the machine limits
-  // We look in our cache to find the machine settings
+  // 1. Find the machine settings in our cache
   const machine = Storage._cache.machines.find(m => m.id === report.machineId);
   
-  if (!machine) return; // Unknown machine
+  if (!machine) {
+    console.error("❌ Security Guard Error: Machine not found in cache!", report.machineId);
+    console.log("   - Available Machines:", Storage._cache.machines);
+    return; 
+  }
+
+  console.log(`🔍 Analyzing Report for ${machine.name}... (Max Temp: ${machine.maxTemp})`);
 
   // 2. Check for Violations
   let faultProb = 0;
   let message = "";
-  let status = "fixed"; // Default to healthy
 
   // Check Temperature
-  if (report.temp > machine.maxTemp) {
+  // We force Number() to ensure we aren't comparing strings
+  if (Number(report.temp) > Number(machine.maxTemp)) {
     faultProb += 40;
     message += `High Temp (${report.temp}°C). `;
+    console.warn("   ⚠️ Violation: High Temperature detected!");
   }
   
   // Check Vibration
-  if (report.vib > machine.maxVib) {
+  if (Number(report.vib) > Number(machine.maxVib)) {
     faultProb += 40;
     message += `High Vib (${report.vib}g). `;
+    console.warn("   ⚠️ Violation: High Vibration detected!");
   }
 
-  // 3. If there is a problem, Create a Log!
+  // 3. Create Log if needed
   if (faultProb > 0) {
-    // Determine severity
-    status = "not"; // "Not Fixed" (Red/Danger)
-    
-    // Check if we already created a log for this specific report 
-    // (To prevent loops)
+    // Check if log already exists for this report ID to prevent duplicates
     const logCheck = await Firebase.db.collection('logs')
                             .where('reportId', '==', reportId).get();
                             
     if (logCheck.empty) {
-        console.warn("⚠️ VIOLATION DETECTED:", message);
+        console.log("📝 Creating Log entry in Firestore...");
         
         await FirestoreDB.addLog({
             machineId: machine.id,
@@ -325,12 +331,14 @@ async function analyzeReport(report, reportId) {
             vibration: report.vib,
             sound: report.sound,
             status: CONFIG.LOG_STATUS.NOT_FIXED,
-            reportId: reportId // Link to source report
+            reportId: reportId
         });
-        
-        // This will automatically trigger the "Lights" to turn RED
-        // because your website is already listening to the 'logs' collection!
+        console.log("✅ Log Created Successfully!");
+    } else {
+        console.log("ℹ️ Log already exists for this report.");
     }
+  } else {
+    console.log("✅ Report looks clean. No violations.");
   }
 }
 

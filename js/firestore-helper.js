@@ -353,6 +353,7 @@ const FirestoreDB = {
         machineId: machineId,
         machineName: machineName, // <--- This creates the missing field!
         currentUserId: userId,
+        reportInterval: reportInterval,
         timestamp: Firebase.timestamp(),
         lastUpdatedBy: user.email,
         lastUpdatedByName: user.displayName || 'Manager'
