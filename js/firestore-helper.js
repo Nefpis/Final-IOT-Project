@@ -337,7 +337,8 @@ const FirestoreDB = {
         // We look up the machine in the 'machines' collection to get its real name
         const machineDoc = await Firebase.db.collection('machines').doc(machineId).get();
         if (machineDoc.exists) {
-          machineName = machineDoc.data().name; 
+          machineName = machineDoc.data().name;
+          reportInterval = machineDoc.data().interval; 
         }
       }
       // --------------------------------------
