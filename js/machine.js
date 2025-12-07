@@ -135,7 +135,8 @@
       'm-max-temp': machine.maxTemp,
       'm-min-vib': machine.minVib,
       'm-max-vib': machine.maxVib,
-      'm-notes': machine.notes || ''
+      'm-notes': machine.notes || '',
+      'm-interval': machine.interval || 15
     };
 
     Object.entries(fields).forEach(([id, value]) => {
@@ -160,6 +161,7 @@
         maxTemp: Number(document.getElementById('m-max-temp').value),
         minVib: Number(document.getElementById('m-min-vib').value),
         maxVib: Number(document.getElementById('m-max-vib').value),
+        interval: Number(document.getElementById('m-interval').value) || 15,
         notes: document.getElementById('m-notes').value.trim()
       };
 
