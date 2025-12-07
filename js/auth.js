@@ -336,6 +336,11 @@ You can still login, and the profile will be created automatically.
       if (user) {
         console.log('🔐 User authenticated:', user.email);
         Auth.currentUser = user;
+
+        // [THIS IS THE TRIGGER]
+        // Starts the guard defined in common.js
+        if (window.SecuritySystem) window.SecuritySystem.start();
+        
         if (callback) callback(user);
       } else {
         console.log('🔓 User not authenticated');

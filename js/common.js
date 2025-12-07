@@ -455,3 +455,96 @@ const MachineStatus = {
     return Storage._cache.machines.find(m => m.id === machineId) || null;
   }
 };
+
+/* common.js - Global Security System */
+
+const SecuritySystem = {
+  isStarted: false,
+
+  // Start listening to reports (called by auth.js)
+  start: () => {
+    if (SecuritySystem.isStarted) return;
+    SecuritySystem.isStarted = true;
+    console.log("🛡️ Global Smart Security Guard Started");
+
+    Firebase.db.collection('reports')
+      .orderBy('timestamp', 'desc')
+      .limit(1)
+      .onSnapshot((snapshot) => {
+        if (snapshot.empty) return;
+        const report = snapshot.docs[0].data();
+        const reportId = snapshot.docs[0].id;
+        SecuritySystem.analyze(report, reportId);
+      });
+  },
+
+  // Analyze report and Update/Create logs
+  analyze: async (report, reportId) => {
+    // 1. Find machine settings in cache
+    // Note: Storage._cache.machines must be populated. 
+    // Since common.js runs everywhere, this usually works after the first load.
+    const machine = Storage._cache.machines.find(m => m.id === report.machineId);
+    
+    if (!machine) return; 
+
+    // 2. Check for Violations
+    let faultProb = 0;
+    let message = "";
+
+    // Force number comparison
+    if (Number(report.temp) > Number(machine.maxTemp)) {
+      faultProb += 40;
+      message += `High Temp (${Number(report.temp).toFixed(1)}°C). `;
+    }
+    
+    if (Number(report.vib) > Number(machine.maxVib)) {
+      faultProb += 40;
+      message += `High Vib (${Number(report.vib).toFixed(2)}g). `;
+    }
+
+    // 3. Handle Logic
+    if (faultProb > 0) {
+      // SMART CHECK: Search for an EXISTING open log ("not fixed")
+      const activeLogs = await Firebase.db.collection('logs')
+        .where('machineId', '==', machine.id)
+        .where('status', '==', 'not') 
+        .get();
+
+      if (!activeLogs.empty) {
+        // [UPDATE] Log exists! Update the numbers and time.
+        const existingLog = activeLogs.docs[0];
+        console.log(`⚠️ Global Guard: Updating log for ${machine.name}...`);
+        
+        await Firebase.db.collection('logs').doc(existingLog.id).update({
+          message: message.trim(),
+          temperature: report.temp,
+          vibration: report.vib,
+          sound: report.sound,
+          faultProbability: Math.min(faultProb, 99),
+          lastUpdated: Firebase.timestamp()
+        });
+        
+      } else {
+        // [CREATE] No open log. Create new one.
+        // Check duplicate by reportId just in case
+        const duplicateCheck = await Firebase.db.collection('logs')
+          .where('reportId', '==', reportId).get();
+
+        if (duplicateCheck.empty) {
+            console.log(`🚨 Global Guard: Creating NEW Log for ${machine.name}...`);
+            
+            await FirestoreDB.addLog({
+                machineId: machine.id,
+                message: message.trim(),
+                faultProbability: Math.min(faultProb, 99),
+                temperature: report.temp,
+                vibration: report.vib,
+                sound: report.sound,
+                status: CONFIG.LOG_STATUS.NOT_FIXED,
+                reportId: reportId
+            });
+        }
+      }
+    }
+  }
+};
