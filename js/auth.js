@@ -340,7 +340,7 @@ You can still login, and the profile will be created automatically.
         // [THIS IS THE TRIGGER]
         // Starts the guard defined in common.js
         if (window.SecuritySystem) window.SecuritySystem.start();
-        
+
         if (callback) callback(user);
       } else {
         console.log('🔓 User not authenticated');
