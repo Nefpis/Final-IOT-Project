@@ -1,0 +1,46 @@
+@import url('../css/index.css'); /* Import base styles */
+
+.about-hero {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(12,32,70,0.06);
+  margin-bottom: 2rem;
+}
+
+.about-img {
+  width: 100%;
+  height: 300px;
+  object-fit: cover;
+}
+
+.about-content {
+  padding: 2rem;
+}
+
+.feature-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--accent);
+}
+
+.contact-footer {
+  background: #0b1320;
+  color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  text-align: center;
+  margin-top: auto;
+}
+
+.contact-link {
+  color: #cfe4ff;
+  text-decoration: none;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.contact-link:hover {
+  color: white;
+  text-decoration: underline;
+}
