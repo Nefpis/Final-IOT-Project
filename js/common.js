@@ -130,12 +130,6 @@ const Validator = {
       }
     }
 
-    if (data.sound !== undefined) {
-      if (!Validator.isInRange(data.sound, 0, 100)) {
-        errors.push('Sound reading out of valid range (0 to 100)');
-      }
-    }
-
     if (data.timestamp) {
       const timestamp = new Date(data.timestamp);
       if (isNaN(timestamp.getTime())) {
@@ -503,6 +497,16 @@ window.SecuritySystem = {
       message += `High Vib (${Number(report.vib).toFixed(2)}g). `;
     }
 
+    const soundStatus = report.sound || "Normal";
+    
+    if (soundStatus === "Problem") {
+        faultProb += 50; // High impact on fault probability
+        message += `AI Detected Audio Anomaly. `;
+    } else if (soundStatus === "Noise") {
+        faultProb += 20; // Medium impact
+        message += `Abnormal Noise Detected. `;
+    }
+
     // 3. Handle Logic
     if (faultProb > 0) {
       // SMART CHECK: Search for an EXISTING open log ("not fixed")
@@ -520,7 +524,7 @@ window.SecuritySystem = {
           message: message.trim(),
           temperature: report.temp,
           vibration: report.vib,
-          sound: report.sound,
+          sound: soundStatus,
           faultProbability: Math.min(faultProb, 99),
           lastUpdated: Firebase.timestamp()
         });
@@ -540,7 +544,7 @@ window.SecuritySystem = {
                 faultProbability: Math.min(faultProb, 99),
                 temperature: report.temp,
                 vibration: report.vib,
-                sound: report.sound,
+                sound: soundStatus,
                 status: CONFIG.LOG_STATUS.NOT_FIXED,
                 reportId: reportId
             });
