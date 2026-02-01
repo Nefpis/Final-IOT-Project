@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>About - TechPredict</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="../css/about.css">
+</head>
+<body>
+
+  <nav class="navbar navbar-dark bg-dark d-md-none">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="index.html">TechPredict</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mobileMenu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+    </div>
+    <div class="collapse bg-dark p-2" id="mobileMenu">
+      <a class="nav-link text-white" href="index.html">Machines</a>
+      <a class="nav-link text-white" href="logs.html">Logs</a>
+      <a class="nav-link text-white" href="status.html">Status Updates</a>
+      <a class="nav-link text-white" href="problems.html">Problems</a>
+      <a class="nav-link text-white" href="profile.html">Profile</a>
+      <a class="nav-link text-warning" href="about.html">About Us</a>
+      <a class="nav-link text-danger" href="#" id="mobileLogout">🚪 Logout</a>
+    </div>
+  </nav>
+
+  <div class="app d-flex">
+
+    <aside class="sidebar d-none d-md-flex flex-column align-items-center text-center p-3">
+      <img src="../img/user.jpg" alt="User" class="user-photo mb-2">
+      <div class="user-info">
+        <div class="fw-bold" id="sbName">Loading...</div>
+      </div>
+
+      <nav class="mt-4 w-100">
+        <a class="nav-link" href="index.html">Machines</a>
+        <a class="nav-link" href="logs.html">Logs</a>
+        <a class="nav-link" href="status.html">Status Updates</a>
+        <a class="nav-link" href="problems.html">Problems</a>
+        <a class="nav-link" href="profile.html">Profile</a>
+        <a class="nav-link active" style="background: rgba(255,255,255,0.1); color: white;" href="about.html">About Us</a>
+      </nav>
+
+      <button class="logout-btn mt-auto" id="logoutBtn">
+        🚪 Logout
+      </button>
+    </aside>
+
+    <main class="content p-4 d-flex flex-column h-100">
+      
+      <div class="about-hero">
+        <img src="../img/Predictive-Maintenance.jpg" alt="Predictive Maintenance" class="about-img" 
+             onerror="this.src='https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'">
+        
+        <div class="about-content">
+          <h1 class="mb-3">About TechPredict</h1>
+          <p class="lead text-muted">
+            Revolutionizing industrial maintenance with IoT and Artificial Intelligence.
+          </p>
+          <hr>
+          <div class="row mt-4">
+            <div class="col-md-8">
+              <h4>Our Mission</h4>
+              <p>
+                TechPredict allows you to monitor your industrial machinery in real-time. 
+                Using advanced ESP32 microcontrollers and Edge Impulse machine learning, 
+                we detect anomalies in sound and vibration before they become critical failures.
+              </p>
+              <p>
+                Our system analyzes sensor data 24/7 to predict maintenance needs, reducing downtime 
+                and saving costs for factories and production lines.
+              </p>
+            </div>
+            <div class="col-md-4">
+              <div class="card bg-light border-0">
+                <div class="card-body">
+                  <h5>Key Features</h5>
+                  <ul class="list-unstyled">
+                    <li>✓ Real-time Vibration Analysis</li>
+                    <li>✓ Audio Anomaly Detection</li>
+                    <li>✓ Temperature Monitoring</li>
+                    <li>✓ Instant Alerts & Logging</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="contact-footer mt-auto">
+        <h3>Want to work with us?</h3>
+        <p class="mb-3">Connect with our support team for custom integrations.</p>
+        <a href="mailto:contact@techpredict.com" class="contact-link">
+          ✉️ contact@techpredict.com
+        </a>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  
+  <script src="../js/firebase-config.js"></script>
+  <script src="../js/firestore-helper.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/common.js"></script>
+  <script src="../js/auth.js"></script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      UI.updateSidebar();
+    });
+  </script>
+</body>
+</html>
