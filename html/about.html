@@ -116,8 +116,17 @@
   <script src="../js/auth.js"></script>
   
   <script>
+    // Wait for Auth to be ready before updating UI
     document.addEventListener('DOMContentLoaded', () => {
-      UI.updateSidebar();
+      Auth.initAuthListener((user) => {
+        if (user) {
+          // User is logged in, update the sidebar info
+          UI.updateSidebar();
+        } else {
+          // No user, redirect to login
+          window.location.href = 'login-registration.html';
+        }
+      });
     });
   </script>
 </body>
