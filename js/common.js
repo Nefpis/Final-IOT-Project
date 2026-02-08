@@ -499,7 +499,7 @@ window.SecuritySystem = {
 
     const soundStatus = report.sound || "Normal";
     
-    if (soundStatus === "Problem") {
+    if (soundStatus === "Bad") {
         faultProb += 50; // High impact on fault probability
         message += `AI Detected Audio Anomaly. `;
     } else if (soundStatus === "Noise") {

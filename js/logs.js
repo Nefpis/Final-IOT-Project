@@ -84,7 +84,7 @@
     let sensorDataHtml = '';
     // Determine color for sound label
     let soundColor = '';
-    if (log.sound === 'Problem') soundColor = 'text-danger fw-bold';
+    if (log.sound === 'Bad') soundColor = 'text-danger fw-bold';
     else if (log.sound === 'Noise') soundColor = 'text-warning';
 
     if (log.temperature || log.vibration || log.sound !== undefined) {
