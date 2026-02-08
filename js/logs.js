@@ -82,6 +82,11 @@
 
     // Build sensor data display
     let sensorDataHtml = '';
+    // Determine color for sound label
+    let soundColor = '';
+    if (log.sound === 'Problem') soundColor = 'text-danger fw-bold';
+    else if (log.sound === 'Noise') soundColor = 'text-warning';
+
     if (log.temperature || log.vibration || log.sound !== undefined) {
       sensorDataHtml = `
         <div class="sensor-data">
@@ -100,7 +105,7 @@
           ${log.sound !== undefined ? `
             <div class="sensor-value">
               <span class="sensor-icon">🔊</span>
-              <span>${log.sound}%</span>
+              <span class="${soundColor}">${log.sound}</span>
             </div>
           ` : ''}
         </div>
