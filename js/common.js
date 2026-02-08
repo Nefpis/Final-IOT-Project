@@ -429,98 +429,142 @@ window.SecuritySystem = {
     const machine = Storage._cache.machines.find(m => m.id === report.machineId);
     if (!machine) return; 
 
-    // 2. Detect Violations (Current Report)
-    let faultProb = 0;
-    let newIssues = [];
-
-    // Force number comparison
-    if (Number(report.temp) > Number(machine.maxTemp)) {
-      faultProb += 40;
-      newIssues.push(`High Temp (${Number(report.temp).toFixed(1)}°C)`);
-    }
+    // 2. Analyze Current Report for Faults
+    let newFaults = {
+        temp: false,
+        vib: false,
+        sound: 'Normal'
+    };
     
+    // Check Temp
+    if (Number(report.temp) > Number(machine.maxTemp)) {
+        newFaults.temp = true;
+    }
+    // Check Vib
     if (Number(report.vib) > Number(machine.maxVib)) {
-      faultProb += 40;
-      newIssues.push(`High Vib (${Number(report.vib).toFixed(2)}g)`);
+        newFaults.vib = true;
+    }
+    // Check Sound
+    if (report.sound === 'Bad' || report.sound === 'Noise') {
+        newFaults.sound = report.sound;
     }
 
-    const soundStatus = report.sound || "Normal";
-    if (soundStatus === "Bad") {
-        faultProb += 50; 
-        newIssues.push("AI Audio Anomaly");
-    } else if (soundStatus === "Noise") {
-        faultProb += 20; 
-        newIssues.push("Abnormal Noise");
-    }
+    // 3. Find EXISTING open log for this machine
+    const activeLogs = await Firebase.db.collection('logs')
+      .where('machineId', '==', machine.id)
+      .where('status', '==', 'not') 
+      .get();
 
-    // 3. Handle Logic
-    if (faultProb > 0) {
-      // Find EXISTING open log for this machine
-      const activeLogs = await Firebase.db.collection('logs')
-        .where('machineId', '==', machine.id)
-        .where('status', '==', 'not') 
-        .get();
-
-      if (!activeLogs.empty) {
+    // 4. Calculate Final State (Union of Old + New)
+    if (!activeLogs.empty) {
         // === MERGE LOGIC ===
         const existingLogDoc = activeLogs.docs[0];
         const existingData = existingLogDoc.data();
+        const existingMsg = existingData.message || "";
         
-        console.log(`⚠️ Global Guard: Merging new issues into existing log for ${machine.name}...`);
+        console.log(`⚠️ Global Guard: Analyzing merge for ${machine.name}...`);
         
-        // A. Sum Probabilities (Old + New, Max 100)
-        // We take the existing probability and add the NEW probability calculated from the fresh report
-        let oldProb = existingData.faultProbability || 0;
-        let mergedProb = Math.min(oldProb + faultProb, 100);
+        // A. Determine Old Faults from Message Keywords
+        const oldFaults = {
+            temp: existingMsg.includes('Temp'),
+            vib: existingMsg.includes('Vib'),
+            sound: existingData.sound || 'Normal'
+        };
 
-        // B. Merge Messages
-        // We take the old message and append new issues if they aren't already mentioned
-        let currentMessage = existingData.message || "";
-        let finalMessage = currentMessage;
-
-        newIssues.forEach(issue => {
-            // Check if this specific issue string is already in the message to avoid duplicates
-            // Example: Don't add "High Temp" if "High Temp" is already there.
-            // Simple check: splitting by keywords or just checking inclusion
-            const keyword = issue.split('(')[0].trim(); // Get "High Temp" from "High Temp (50C)"
-            if (!currentMessage.includes(keyword)) {
-                if (finalMessage.length > 0) finalMessage += ", ";
-                finalMessage += issue;
-            }
-        });
-
-        // Update the log
-        await Firebase.db.collection('logs').doc(existingLogDoc.id).update({
-          message: finalMessage,
-          faultProbability: mergedProb,
-          // We update sensor data to the LATEST reading so the user sees current state
-          temperature: report.temp,
-          vibration: report.vib,
-          sound: soundStatus,
-          lastUpdated: Firebase.timestamp()
-        });
+        // B. Merge States (Union)
+        const finalState = {
+            temp: newFaults.temp || oldFaults.temp,
+            vib: newFaults.vib || oldFaults.vib,
+            sound: newFaults.sound // Start with new sound
+        };
         
-      } else {
-        // === CREATE NEW LOG ===
-        // Check duplicate by reportId just in case to prevent double firing on same snapshot
-        const duplicateCheck = await Firebase.db.collection('logs')
-          .where('reportId', '==', reportId).get();
+        // C. Sound Priority Rule (Bad > Noise > Normal)
+        // If it WAS Bad, it stays Bad even if new report says Noise
+        if (oldFaults.sound === 'Bad' && newFaults.sound === 'Noise') {
+            finalState.sound = 'Bad';
+        } else if (newFaults.sound === 'Normal' && oldFaults.sound !== 'Normal') {
+            // Keep old sound status if new report implies it's gone? 
+            // Usually, we trust the new report, but "Union" logic implies accumulating faults.
+            // Let's keep the most severe status seen so far.
+            finalState.sound = oldFaults.sound; 
+        }
 
-        if (duplicateCheck.empty) {
-            console.log(`🚨 Global Guard: Creating NEW Log for ${machine.name}...`);
-            
-            await FirestoreDB.addLog({
-                machineId: machine.id,
-                message: newIssues.join(", "),
-                faultProbability: Math.min(faultProb, 99),
+        // D. Calculate NEW Total Probability (Sum of distinct faults)
+        let totalProb = 0;
+        let messages = [];
+
+        if (finalState.temp) {
+            totalProb += 40;
+            messages.push(`High Temp (${Number(report.temp).toFixed(1)}°C)`);
+        }
+        if (finalState.vib) {
+            totalProb += 40;
+            messages.push(`High Vib (${Number(report.vib).toFixed(2)}g)`);
+        }
+        if (finalState.sound === 'Bad') {
+            totalProb += 50;
+            messages.push("AI Audio Anomaly");
+        } else if (finalState.sound === 'Noise') {
+            totalProb += 20;
+            messages.push("Abnormal Noise");
+        }
+
+        // Cap at 100%
+        totalProb = Math.min(totalProb, 100);
+        
+        // E. Update Log
+        if (totalProb > 0) {
+            await Firebase.db.collection('logs').doc(existingLogDoc.id).update({
+                message: messages.join(", "),
+                faultProbability: totalProb,
                 temperature: report.temp,
                 vibration: report.vib,
-                sound: soundStatus,
-                status: CONFIG.LOG_STATUS.NOT_FIXED,
-                reportId: reportId
+                sound: finalState.sound,
+                lastUpdated: Firebase.timestamp()
             });
         }
-      }
+        
+    } else {
+        // === CREATE NEW LOG ===
+        let totalProb = 0;
+        let messages = [];
+
+        if (newFaults.temp) {
+            totalProb += 40;
+            messages.push(`High Temp (${Number(report.temp).toFixed(1)}°C)`);
+        }
+        if (newFaults.vib) {
+            totalProb += 40;
+            messages.push(`High Vib (${Number(report.vib).toFixed(2)}g)`);
+        }
+        if (newFaults.sound === 'Bad') {
+            totalProb += 50;
+            messages.push("AI Audio Anomaly");
+        } else if (newFaults.sound === 'Noise') {
+            totalProb += 20;
+            messages.push("Abnormal Noise");
+        }
+
+        if (totalProb > 0) {
+            // Check duplicate by reportId just in case
+            const duplicateCheck = await Firebase.db.collection('logs')
+              .where('reportId', '==', reportId).get();
+
+            if (duplicateCheck.empty) {
+                console.log(`🚨 Global Guard: Creating NEW Log for ${machine.name}...`);
+                
+                await FirestoreDB.addLog({
+                    machineId: machine.id,
+                    message: messages.join(", "),
+                    faultProbability: Math.min(totalProb, 99),
+                    temperature: report.temp,
+                    vibration: report.vib,
+                    sound: newFaults.sound,
+                    status: CONFIG.LOG_STATUS.NOT_FIXED,
+                    reportId: reportId
+                });
+            }
+        }
     }
   }
 };
