@@ -1,4 +1,4 @@
-/* common.js - Shared Utilities (WITH SMART PROFILE CACHE) */
+/* common.js - Shared Utilities (WITH SMART PROFILE CACHE & MERGED LOGS) */
 
 // Utility functions
 const Utils = {
@@ -169,11 +169,10 @@ const Validator = {
   }
 };
 
-// Profile Cache Manager - NEW!
+// Profile Cache Manager
 const ProfileCache = {
   KEY: 'cached_user_profile',
   
-  // Save profile to localStorage for instant access
   save: (profile) => {
     try {
       localStorage.setItem(ProfileCache.KEY, JSON.stringify(profile));
@@ -183,7 +182,6 @@ const ProfileCache = {
     }
   },
   
-  // Load profile from localStorage (instant!)
   load: () => {
     try {
       const cached = localStorage.getItem(ProfileCache.KEY);
@@ -197,7 +195,6 @@ const ProfileCache = {
     return null;
   },
   
-  // Clear cache (on logout)
   clear: () => {
     try {
       localStorage.removeItem(ProfileCache.KEY);
@@ -219,21 +216,11 @@ const Storage = {
   },
 
   load: (key, defaultValue = []) => {
-    if (key === CONFIG.STORAGE_KEYS.MACHINES) {
-      return Storage._cache.machines;
-    }
-    if (key === CONFIG.STORAGE_KEYS.LOGS) {
-      return Storage._cache.logs;
-    }
-    if (key === CONFIG.STORAGE_KEYS.REPORTS) {
-      return Storage._cache.reports;
-    }
-    if (key === CONFIG.STORAGE_KEYS.PROBLEMS) {
-      return Storage._cache.problems;
-    }
-    if (key === CONFIG.STORAGE_KEYS.PROFILE) {
-      return Storage._cache.profile || defaultValue;
-    }
+    if (key === CONFIG.STORAGE_KEYS.MACHINES) return Storage._cache.machines;
+    if (key === CONFIG.STORAGE_KEYS.LOGS) return Storage._cache.logs;
+    if (key === CONFIG.STORAGE_KEYS.REPORTS) return Storage._cache.reports;
+    if (key === CONFIG.STORAGE_KEYS.PROBLEMS) return Storage._cache.problems;
+    if (key === CONFIG.STORAGE_KEYS.PROFILE) return Storage._cache.profile || defaultValue;
     
     try {
       const data = localStorage.getItem(key);
@@ -266,7 +253,6 @@ const Storage = {
 
   clear: () => {
     try {
-      // Clear everything including profile cache
       localStorage.clear();
       ProfileCache.clear();
       return true;
@@ -281,16 +267,12 @@ const Storage = {
 const UI = {
   showLoading: (elementId) => {
     const el = document.getElementById(elementId);
-    if (el) {
-      el.innerHTML = '<div class="text-center p-4"><div class="spinner-border" role="status"></div></div>';
-    }
+    if (el) el.innerHTML = '<div class="text-center p-4"><div class="spinner-border" role="status"></div></div>';
   },
 
   hideLoading: (elementId) => {
     const el = document.getElementById(elementId);
-    if (el) {
-      el.innerHTML = '';
-    }
+    if (el) el.innerHTML = '';
   },
 
   showAlert: (message, type = 'info') => {
@@ -301,68 +283,45 @@ const UI = {
     return window.confirm(message);
   },
 
-  // Update sidebar - WITH INSTANT CACHE LOADING
   updateSidebar: async () => {
     const userId = Firebase.getCurrentUserId();
     if (!userId) return;
 
-    // STEP 1: Load from cache FIRST (instant display!)
     let profile = ProfileCache.load();
-    
     if (profile) {
-      // Display cached profile immediately (no "Loading...")
       UI._displayProfile(profile);
     } else {
-      // Show loading only if no cache exists
       const nameElements = document.querySelectorAll('#sbName, #sbN, #sbN2');
       nameElements.forEach(el => {
         if (el) el.textContent = 'Loading...';
       });
     }
 
-    // STEP 2: Load from Firestore in background and update cache
     try {
       const freshProfile = await FirestoreDB.getUserProfile();
-      
       if (freshProfile) {
-        // Update cache with fresh data
         ProfileCache.save(freshProfile);
         Storage._cache.profile = freshProfile;
-        
-        // Update display with fresh data
         UI._displayProfile(freshProfile);
       }
     } catch (error) {
       console.error('Failed to load profile from Firestore:', error);
-      // If cache exists, continue using it
-      if (!profile) {
-        console.error('No cached profile available');
-      }
     }
-
     UI.setupLogoutButton();
   },
 
-  // Internal helper to display profile
   _displayProfile: (profile) => {
     const fullName = profile.name || `${profile.firstname || 'Demo'} ${profile.lastname || 'User'}`;
-
     const nameElements = document.querySelectorAll('#sbName, #sbN, #sbN2');
-    nameElements.forEach(el => {
-      if (el) el.textContent = fullName;
-    });
+    nameElements.forEach(el => { if (el) el.textContent = fullName; });
 
     const emailElements = document.querySelectorAll('#sbEmail, #sbE, #sbE2');
-    emailElements.forEach(el => {
-      if (el) el.textContent = profile.email;
-    });
+    emailElements.forEach(el => { if (el) el.textContent = profile.email; });
 
     const machines = Storage._cache.machines;
     const countElements = document.querySelectorAll('#sbCount, #profileMachines, #countMd');
     countElements.forEach(el => {
-      if (el) {
-        el.textContent = el.id === 'profileMachines' ? machines.length : `Machines: ${machines.length}`;
-      }
+      if (el) el.textContent = el.id === 'profileMachines' ? machines.length : `Machines: ${machines.length}`;
     });
 
     const photoUrl = profile.photo || '../img/user.jpg';
@@ -384,19 +343,14 @@ const UI = {
 
     const handleLogout = async () => {
       if (!UI.confirm('Are you sure you want to logout?')) return;
-
       const result = await Auth.logout();
-      
       if (result.success) {
-        // Clear ALL caches
         Storage._cache.machines = [];
         Storage._cache.logs = [];
         Storage._cache.reports = [];
         Storage._cache.problems = [];
         Storage._cache.profile = null;
         ProfileCache.clear();
-        
-        // Force redirect
         window.location.replace('login-registration.html');
       } else {
         UI.showAlert('Logout failed', 'error');
@@ -407,7 +361,6 @@ const UI = {
       logoutBtn.setAttribute('data-logout-initialized', 'true');
       logoutBtn.addEventListener('click', handleLogout);
     }
-
     if (mobileLogout && !mobileLogout.hasAttribute('data-logout-initialized')) {
       mobileLogout.setAttribute('data-logout-initialized', 'true');
       mobileLogout.addEventListener('click', (e) => {
@@ -422,21 +375,15 @@ const UI = {
 const MachineStatus = {
   syncFromLogs: (machineId) => {
     const logs = Storage._cache.logs.filter(l => l.machineId === machineId);
-    
     const hasNotFixed = logs.some(l => l.status === CONFIG.LOG_STATUS.NOT_FIXED);
     const hasInProgress = logs.some(l => l.status === CONFIG.LOG_STATUS.IN_PROGRESS);
     
-    const machines = Storage._cache.machines;
-    const machine = machines.find(m => m.id === machineId);
-    
+    const machine = Storage._cache.machines.find(m => m.id === machineId);
     if (!machine) return;
     
     let newStatus = CONFIG.STATUS.GREEN;
-    if (hasNotFixed) {
-      newStatus = CONFIG.STATUS.RED;
-    } else if (hasInProgress) {
-      newStatus = CONFIG.STATUS.YELLOW;
-    }
+    if (hasNotFixed) newStatus = CONFIG.STATUS.RED;
+    else if (hasInProgress) newStatus = CONFIG.STATUS.YELLOW;
     
     FirestoreDB.updateMachine(machineId, { status: newStatus });
   },
@@ -450,17 +397,21 @@ const MachineStatus = {
   }
 };
 
-/* common.js - Global Security System */
+/* common.js - Global Security System (UPGRADED) */
 
 window.SecuritySystem = {
   isStarted: false,
 
   // Start listening to reports (called by auth.js)
   start: () => {
-    if (window.SecuritySystem.isStarted) return; // Use window reference
+    if (window.SecuritySystem.isStarted) return; 
     window.SecuritySystem.isStarted = true;
     console.log("🛡️ Global Smart Security Guard Started");
 
+    // 1. Run Cleanup on Start
+    FirestoreDB.cleanupSystem();
+
+    // 2. Listen for new reports
     Firebase.db.collection('reports')
       .orderBy('timestamp', 'desc')
       .limit(1)
@@ -468,70 +419,90 @@ window.SecuritySystem = {
         if (snapshot.empty) return;
         const report = snapshot.docs[0].data();
         const reportId = snapshot.docs[0].id;
-        // Ensure we call analyze on the window object
         window.SecuritySystem.analyze(report, reportId);
       });
   },
 
-  // Analyze report and Update/Create logs
+  // Analyze report and Update/Create logs (Merged Logic)
   analyze: async (report, reportId) => {
     // 1. Find machine settings in cache
-    // Note: Storage._cache.machines must be populated. 
-    // Since common.js runs everywhere, this usually works after the first load.
     const machine = Storage._cache.machines.find(m => m.id === report.machineId);
-    
     if (!machine) return; 
 
-    // 2. Check for Violations
+    // 2. Detect Violations (Current Report)
     let faultProb = 0;
-    let message = "";
+    let newIssues = [];
 
     // Force number comparison
     if (Number(report.temp) > Number(machine.maxTemp)) {
       faultProb += 40;
-      message += `High Temp (${Number(report.temp).toFixed(1)}°C). `;
+      newIssues.push(`High Temp (${Number(report.temp).toFixed(1)}°C)`);
     }
     
     if (Number(report.vib) > Number(machine.maxVib)) {
       faultProb += 40;
-      message += `High Vib (${Number(report.vib).toFixed(2)}g). `;
+      newIssues.push(`High Vib (${Number(report.vib).toFixed(2)}g)`);
     }
 
     const soundStatus = report.sound || "Normal";
-    
     if (soundStatus === "Bad") {
-        faultProb += 50; // High impact on fault probability
-        message += `AI Detected Audio Anomaly. `;
+        faultProb += 50; 
+        newIssues.push("AI Audio Anomaly");
     } else if (soundStatus === "Noise") {
-        faultProb += 20; // Medium impact
-        message += `Abnormal Noise Detected. `;
+        faultProb += 20; 
+        newIssues.push("Abnormal Noise");
     }
 
     // 3. Handle Logic
     if (faultProb > 0) {
-      // SMART CHECK: Search for an EXISTING open log ("not fixed")
+      // Find EXISTING open log for this machine
       const activeLogs = await Firebase.db.collection('logs')
         .where('machineId', '==', machine.id)
         .where('status', '==', 'not') 
         .get();
 
       if (!activeLogs.empty) {
-        // [UPDATE] Log exists! Update the numbers and time.
-        const existingLog = activeLogs.docs[0];
-        console.log(`⚠️ Global Guard: Updating log for ${machine.name}...`);
+        // === MERGE LOGIC ===
+        const existingLogDoc = activeLogs.docs[0];
+        const existingData = existingLogDoc.data();
         
-        await Firebase.db.collection('logs').doc(existingLog.id).update({
-          message: message.trim(),
+        console.log(`⚠️ Global Guard: Merging new issues into existing log for ${machine.name}...`);
+        
+        // A. Sum Probabilities (Old + New, Max 100)
+        // We take the existing probability and add the NEW probability calculated from the fresh report
+        let oldProb = existingData.faultProbability || 0;
+        let mergedProb = Math.min(oldProb + faultProb, 100);
+
+        // B. Merge Messages
+        // We take the old message and append new issues if they aren't already mentioned
+        let currentMessage = existingData.message || "";
+        let finalMessage = currentMessage;
+
+        newIssues.forEach(issue => {
+            // Check if this specific issue string is already in the message to avoid duplicates
+            // Example: Don't add "High Temp" if "High Temp" is already there.
+            // Simple check: splitting by keywords or just checking inclusion
+            const keyword = issue.split('(')[0].trim(); // Get "High Temp" from "High Temp (50C)"
+            if (!currentMessage.includes(keyword)) {
+                if (finalMessage.length > 0) finalMessage += ", ";
+                finalMessage += issue;
+            }
+        });
+
+        // Update the log
+        await Firebase.db.collection('logs').doc(existingLogDoc.id).update({
+          message: finalMessage,
+          faultProbability: mergedProb,
+          // We update sensor data to the LATEST reading so the user sees current state
           temperature: report.temp,
           vibration: report.vib,
           sound: soundStatus,
-          faultProbability: Math.min(faultProb, 99),
           lastUpdated: Firebase.timestamp()
         });
         
       } else {
-        // [CREATE] No open log. Create new one.
-        // Check duplicate by reportId just in case
+        // === CREATE NEW LOG ===
+        // Check duplicate by reportId just in case to prevent double firing on same snapshot
         const duplicateCheck = await Firebase.db.collection('logs')
           .where('reportId', '==', reportId).get();
 
@@ -540,7 +511,7 @@ window.SecuritySystem = {
             
             await FirestoreDB.addLog({
                 machineId: machine.id,
-                message: message.trim(),
+                message: newIssues.join(", "),
                 faultProbability: Math.min(faultProb, 99),
                 temperature: report.temp,
                 vibration: report.vib,
