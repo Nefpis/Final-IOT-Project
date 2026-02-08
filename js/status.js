@@ -1,7 +1,6 @@
 /* status.js - Status Reports Page (FIRESTORE) */
 
 (() => {
-  let unsubscribeReports = null;
   let unsubscribeMachines = null;
 
   // Render status reports table
@@ -36,13 +35,23 @@
         }
       }
 
+      // Determine Sound Display
+      const soundVal = report.sound || 'Normal';
+      let soundClass = 'text-success'; // Default Green
+      
+      if (soundVal === 'Bad') {
+          soundClass = 'text-danger fw-bold'; // Red for Bad
+      } else if (soundVal === 'Noise') {
+          soundClass = 'text-warning fw-bold'; // Orange/Yellow for Noise
+      }
+
       tr.className = rowClass;
       tr.innerHTML = `
         <td>${Utils.formatDate(report.timestamp)}</td>
         <td>${report.machineName || 'Unknown'}</td>
         <td>${report.temp}°C</td>
         <td>${report.vib}g</td>
-        <td class="small text-muted">${report.source || 'Auto report'}</td>
+        <td class="${soundClass}">${soundVal}</td>
       `;
       
       tbody.appendChild(tr);
@@ -68,12 +77,18 @@
 
     filtered.slice(0, 100).forEach(report => {
       const tr = document.createElement('tr');
+      
+      const soundVal = report.sound || 'Normal';
+      let soundClass = 'text-success';
+      if (soundVal === 'Bad') soundClass = 'text-danger fw-bold';
+      else if (soundVal === 'Noise') soundClass = 'text-warning fw-bold';
+
       tr.innerHTML = `
         <td>${Utils.formatDate(report.timestamp)}</td>
         <td>${report.machineName || 'Unknown'}</td>
         <td>${report.temp}°C</td>
         <td>${report.vib}g</td>
-        <td class="small text-muted">${report.source || 'Auto report'}</td>
+        <td class="${soundClass}">${soundVal}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -112,12 +127,13 @@
       return;
     }
 
-    // Create CSV header
-    let csv = 'Timestamp,Machine,Temperature (°C),Vibration (g),Source\n';
+    // Create CSV header - UPDATED with Sound
+    let csv = 'Timestamp,Machine,Temperature (°C),Vibration (g),Sound\n';
     
     // Add data rows
     reports.forEach(report => {
-      csv += `"${Utils.formatDate(report.timestamp)}","${report.machineName}",${report.temp},${report.vib},"${report.source || 'Auto report'}"\n`;
+      const soundVal = report.sound || 'Normal';
+      csv += `"${Utils.formatDate(report.timestamp)}","${report.machineName}",${report.temp},${report.vib},"${soundVal}"\n`;
     });
 
     // Create download link

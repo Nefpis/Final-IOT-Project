@@ -49,7 +49,12 @@
     <main class="content p-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="h5 m-0">Status Updates</h2>
-        <small class="text-muted">Reports sent by each machine (simulated)</small>
+        <div class="d-flex gap-2">
+           <select id="machineFilter" class="form-select form-select-sm" style="width: 150px;">
+             <option value="all">All Machines</option>
+           </select>
+           <button id="exportBtn" class="btn btn-sm btn-outline-success">Export CSV</button>
+        </div>
       </div>
 
       <div class="card">
@@ -61,12 +66,10 @@
                 <th>Machine</th>
                 <th>Temp (°C)</th>
                 <th>Vibration (g)</th>
-                <th>Notes</th>
-              </tr>
+                <th>Sound</th> </tr>
             </thead>
             <tbody id="statusTable">
-              <!-- populated by app.js -->
-            </tbody>
+              </tbody>
           </table>
         </div>
       </div>
@@ -75,12 +78,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-  <!-- Firebase SDKs (v9 compat mode) -->
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<!-- Firebase Config -->
 <script src="../js/firebase-config.js"></script>
 <script src="../js/firestore-helper.js"></script>
 
