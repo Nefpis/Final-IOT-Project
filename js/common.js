@@ -445,7 +445,7 @@ window.SecuritySystem = {
         newFaults.vib = true;
     }
     // Check Sound
-    if (report.sound === 'Bad' || report.sound === 'Noise') {
+    if (report.sound === 'Bad') {
         newFaults.sound = report.sound;
     }
 
@@ -480,7 +480,7 @@ window.SecuritySystem = {
         
         // C. Sound Priority Rule (Bad > Noise > Normal)
         // If it WAS Bad, it stays Bad even if new report says Noise
-        if (oldFaults.sound === 'Bad' && newFaults.sound === 'Noise') {
+        if (oldFaults.sound === 'Bad') {
             finalState.sound = 'Bad';
         } else if (newFaults.sound === 'Normal' && oldFaults.sound !== 'Normal') {
             // Keep old sound status if new report implies it's gone? 
@@ -504,9 +504,6 @@ window.SecuritySystem = {
         if (finalState.sound === 'Bad') {
             totalProb += 50;
             messages.push("AI Audio Anomaly");
-        } else if (finalState.sound === 'Noise') {
-            totalProb += 20;
-            messages.push("Abnormal Noise");
         }
 
         // Cap at 100%
@@ -540,9 +537,6 @@ window.SecuritySystem = {
         if (newFaults.sound === 'Bad') {
             totalProb += 50;
             messages.push("AI Audio Anomaly");
-        } else if (newFaults.sound === 'Noise') {
-            totalProb += 20;
-            messages.push("Abnormal Noise");
         }
 
         if (totalProb > 0) {
